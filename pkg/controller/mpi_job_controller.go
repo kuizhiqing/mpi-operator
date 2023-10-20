@@ -612,15 +612,9 @@ func (c *MPIJobController) syncHandler(key string) error {
 				return err
 			}
 		}
-		if mpiJob.Spec.MPIImplementation == kubeflow.MPIImplementationIntel ||
-			mpiJob.Spec.MPIImplementation == kubeflow.MPIImplementationMPICH {
-			// The Intel and MPICH implementations require workers to communicate with the
-			// launcher through its hostname. For that, we create a Service which
-			// has the same name as the launcher's hostname.
-			_, err := c.getOrCreateService(mpiJob, newLauncherService(mpiJob))
-			if err != nil {
-				return fmt.Errorf("getting or creating Service to front launcher: %w", err)
-			}
+
+		if svc, err := c.getOrCreateService(mpiJob, newLauncherService(mpiJob)); svc != nil && err != nil {
+			return fmt.Errorf("getting or creating Service to front launcher: %w", err)
 		}
 		if launcher == nil {
 			if mpiJob.Spec.LauncherCreationPolicy == kubeflow.LauncherCreationPolicyAtStartup || c.countReadyWorkerPods(worker) == len(worker) {
@@ -1230,6 +1224,20 @@ func (c *MPIJobController) doUpdateJobStatus(mpiJob *kubeflow.MPIJob) error {
 	return err
 }
 
+// enableLauncherAsWorker check whether to run worker process in launcher pod
+func enableLauncherAsWorker(mpiJob *kubeflow.MPIJob) bool {
+	worker := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker]
+	if worker == nil || len(worker.Template.Spec.Containers) < 1 {
+		return true
+	}
+
+	workerRes := worker.Template.Spec.Containers[0].Resources
+	launcher := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeLauncher]
+	launcherRes := launcher.Template.Spec.Containers[0].Resources
+
+	return equality.Semantic.DeepEqual(workerRes, launcherRes)
+}
+
 // newConfigMap creates a new ConfigMap containing configurations for an MPIJob
 // resource. It also sets the appropriate OwnerReferences on the resource so
 // handleObject can discover the MPIJob resource that 'owns' it.
@@ -1239,6 +1247,16 @@ func newConfigMap(mpiJob *kubeflow.MPIJob, workerReplicas int32) *corev1.ConfigM
 	slots := 1
 	if mpiJob.Spec.SlotsPerWorker != nil {
 		slots = int(*mpiJob.Spec.SlotsPerWorker)
+	}
+
+	if enableLauncherAsWorker(mpiJob) {
+		launcherService := mpiJob.Name + launcherSuffix
+		switch mpiJob.Spec.MPIImplementation {
+		case kubeflow.MPIImplementationOpenMPI:
+			buffer.WriteString(fmt.Sprintf("%s.%s.svc slots=%d\n", launcherService, mpiJob.Namespace, slots))
+		case kubeflow.MPIImplementationIntel, kubeflow.MPIImplementationMPICH:
+			buffer.WriteString(fmt.Sprintf("%s.%s.svc:%d\n", launcherService, mpiJob.Namespace, slots))
+		}
 	}
 	for i := 0; i < int(workerReplicas); i++ {
 		switch mpiJob.Spec.MPIImplementation {
