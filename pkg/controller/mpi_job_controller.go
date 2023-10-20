@@ -40,12 +40,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	batchinformers "k8s.io/client-go/informers/batch/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	schedulinginformers "k8s.io/client-go/informers/scheduling/v1"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	batchlisters "k8s.io/client-go/listers/batch/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	schedulinglisters "k8s.io/client-go/listers/scheduling/v1"
 	"k8s.io/client-go/tools/cache"
@@ -232,8 +230,6 @@ type MPIJobController struct {
 	secretSynced        cache.InformerSynced
 	serviceLister       corelisters.ServiceLister
 	serviceSynced       cache.InformerSynced
-	jobLister           batchlisters.JobLister
-	jobSynced           cache.InformerSynced
 	podLister           corelisters.PodLister
 	podSynced           cache.InformerSynced
 	podGroupSynced      cache.InformerSynced
@@ -268,13 +264,12 @@ func NewMPIJobController(
 	configMapInformer coreinformers.ConfigMapInformer,
 	secretInformer coreinformers.SecretInformer,
 	serviceInformer coreinformers.ServiceInformer,
-	jobInformer batchinformers.JobInformer,
 	podInformer coreinformers.PodInformer,
 	priorityClassInformer schedulinginformers.PriorityClassInformer,
 	mpiJobInformer informers.MPIJobInformer,
 	namespace, gangSchedulingName string) *MPIJobController {
 	return NewMPIJobControllerWithClock(kubeClient, kubeflowClient, volcanoClient, schedClient,
-		configMapInformer, secretInformer, serviceInformer, jobInformer, podInformer,
+		configMapInformer, secretInformer, serviceInformer, podInformer,
 		priorityClassInformer, mpiJobInformer, &clock.RealClock{}, namespace, gangSchedulingName)
 }
 
@@ -287,7 +282,6 @@ func NewMPIJobControllerWithClock(
 	configMapInformer coreinformers.ConfigMapInformer,
 	secretInformer coreinformers.SecretInformer,
 	serviceInformer coreinformers.ServiceInformer,
-	jobInformer batchinformers.JobInformer,
 	podInformer coreinformers.PodInformer,
 	priorityClassInformer schedulinginformers.PriorityClassInformer,
 	mpiJobInformer informers.MPIJobInformer,
@@ -330,8 +324,6 @@ func NewMPIJobControllerWithClock(
 		secretSynced:        secretInformer.Informer().HasSynced,
 		serviceLister:       serviceInformer.Lister(),
 		serviceSynced:       serviceInformer.Informer().HasSynced,
-		jobLister:           jobInformer.Lister(),
-		jobSynced:           jobInformer.Informer().HasSynced,
 		podLister:           podInformer.Lister(),
 		podSynced:           podInformer.Informer().HasSynced,
 		podGroupSynced:      podGroupSynced,
@@ -376,11 +368,6 @@ func NewMPIJobControllerWithClock(
 		UpdateFunc: controller.handleObjectUpdate,
 		DeleteFunc: controller.handleObject,
 	})
-	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    controller.handleObject,
-		UpdateFunc: controller.handleObjectUpdate,
-		DeleteFunc: controller.handleObject,
-	})
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controller.handleObject,
 		UpdateFunc: controller.handleObjectUpdate,
@@ -418,7 +405,6 @@ func (c *MPIJobController) Run(threadiness int, stopCh <-chan struct{}) error {
 		c.configMapSynced,
 		c.secretSynced,
 		c.serviceSynced,
-		c.jobSynced,
 		c.podSynced,
 		c.mpiJobSynced,
 	}
@@ -576,8 +562,8 @@ func (c *MPIJobController) syncHandler(key string) error {
 		mpiJob.Status.StartTime = &now
 	}
 
-	// Get the launcher Job for this MPIJob.
-	launcher, err := c.getLauncherJob(mpiJob)
+	// Get the launcher Pod for this MPIJob.
+	launcher, err := c.getLauncherPod(mpiJob)
 	if err != nil {
 		return err
 	}
@@ -618,7 +604,7 @@ func (c *MPIJobController) syncHandler(key string) error {
 		}
 		if launcher == nil {
 			if mpiJob.Spec.LauncherCreationPolicy == kubeflow.LauncherCreationPolicyAtStartup || c.countReadyWorkerPods(worker) == len(worker) {
-				launcher, err = c.kubeClient.BatchV1().Jobs(namespace).Create(context.TODO(), c.newLauncherJob(mpiJob), metav1.CreateOptions{})
+				launcher, err = c.kubeClient.CoreV1().Pods(namespace).Create(context.TODO(), c.newLauncherPod(mpiJob), metav1.CreateOptions{})
 				if err != nil {
 					c.recorder.Eventf(mpiJob, corev1.EventTypeWarning, mpiJobFailedReason, "launcher pod created failed: %v", err)
 					return fmt.Errorf("creating launcher Pod: %w", err)
@@ -633,7 +619,7 @@ func (c *MPIJobController) syncHandler(key string) error {
 		if isMPIJobSuspended(mpiJob) != isJobSuspended(launcher) {
 			// align the suspension state of launcher with the MPIJob
 			launcher.Spec.Suspend = pointer.Bool(isMPIJobSuspended(mpiJob))
-			if _, err := c.kubeClient.BatchV1().Jobs(namespace).Update(context.TODO(), launcher, metav1.UpdateOptions{}); err != nil {
+			if _, err := c.kubeClient.CoreV1().Pods(namespace).Update(context.TODO(), launcher, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 		}
@@ -960,7 +946,7 @@ func isMPIJobSuspended(mpiJob *kubeflow.MPIJob) bool {
 	return pointer.BoolDeref(mpiJob.Spec.RunPolicy.Suspend, false)
 }
 
-func isJobSuspended(job *batchv1.Job) bool {
+func isJobSuspended(job *corev1.Pod) bool {
 	return pointer.BoolDeref(job.Spec.Suspend, false)
 }
 
@@ -1006,7 +992,7 @@ func (c *MPIJobController) deleteWorkerPods(mpiJob *kubeflow.MPIJob) error {
 	return nil
 }
 
-func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher *batchv1.Job, worker []*corev1.Pod) error {
+func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, worker []*corev1.Pod) error {
 	oldStatus := mpiJob.Status.DeepCopy()
 	if isMPIJobSuspended(mpiJob) {
 		// it is suspended now
@@ -1094,8 +1080,8 @@ func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher 
 	return nil
 }
 
-func (c *MPIJobController) updateMPIJobFailedStatus(mpiJob *kubeflow.MPIJob, launcher *batchv1.Job, launcherPods []*corev1.Pod) {
-	jobFailedCond := getJobCondition(launcher, batchv1.JobFailed)
+func (c *MPIJobController) updateMPIJobFailedStatus(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, launcherPods []*corev1.Pod) {
+	jobFailedCond := getJobCondition(launcher, corev1.PodFailed)
 	reason := jobFailedCond.Reason
 	if reason == "" {
 		reason = mpiJobFailedReason
