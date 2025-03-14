@@ -17,5 +17,5 @@
 // +k8s:openapi-gen=true
 
 // Package v2beta1 is the v2beta1 version of the API.
-// +groupName=kubeflow.org
+// +groupName=kubeflow.com
 package v2beta1

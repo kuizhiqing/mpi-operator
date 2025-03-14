@@ -146,14 +146,19 @@ func Run(opt *options.ServerOption) error {
 			mpiJobClientSet,
 			volcanoClientSet,
 			schedClientSet,
+			kubeInformerFactory.Core().V1().Events(),
 			kubeInformerFactory.Core().V1().ConfigMaps(),
 			kubeInformerFactory.Core().V1().Secrets(),
 			kubeInformerFactory.Core().V1().Services(),
-			kubeInformerFactory.Batch().V1().Jobs(),
 			kubeInformerFactory.Core().V1().Pods(),
 			kubeInformerFactory.Scheduling().V1().PriorityClasses(),
 			kubeflowInformerFactory.Kubeflow().V2beta1().MPIJobs(),
-			namespace, opt.GangSchedulingName)
+			namespace,
+			opt.GangSchedulingName,
+			opt.ExcludeNamespaces,
+			opt.IncludeNamespaces,
+			opt.RestartLimit,
+		)
 
 		go kubeInformerFactory.Start(ctx.Done())
 		go kubeflowInformerFactory.Start(ctx.Done())
@@ -202,7 +207,7 @@ func Run(opt *options.ServerOption) error {
 	rl := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Namespace: opt.LockNamespace,
-			Name:      controllerName,
+			Name:      opt.LockName,
 		},
 		Client: leaderElectionClientSet.CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{

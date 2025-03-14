@@ -3,11 +3,11 @@ kind: Kustomization
 resources:
 - ../../base
 - namespace.yaml
-namespace: mpi-operator
+namespace: kube-system
 commonLabels:
-  kustomize.component: mpi-operator
-  app: mpi-operator
-  app.kubernetes.io/name: mpi-operator
+  kustomize.component: launch-operator
+  app: launch-operator
+  app.kubernetes.io/name: launch-operator
   app.kubernetes.io/component: mpijob
 images:
 - name: mpioperator/mpi-operator
@@ -18,5 +18,5 @@ patches:
       group: apps
       version: v1
       kind: Deployment
-      name: mpi-operator
+      name: launch-operator
     path: ./patch.yaml

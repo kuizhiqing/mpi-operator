@@ -17,7 +17,7 @@ REPO_PATH="github.com/kubeflow/mpi-operator"
 REL_OSARCH="linux/amd64"
 GitSHA=$(shell git rev-parse HEAD)
 Date=$(shell date "+%Y-%m-%d %H:%M:%S")
-RELEASE_VERSION?=v0.4.0
+RELEASE_VERSION?=$(shell git describe --tags --always)
 CONTROLLER_VERSION?=v2
 BASE_IMAGE_SSH_PORT?=2222
 IMG_BUILDER=docker
@@ -28,7 +28,7 @@ LD_FLAGS_V2=" \
     -X '${REPO_PATH}/pkg/version.GitSHA=${GitSHA}' \
     -X '${REPO_PATH}/pkg/version.Built=${Date}'   \
     -X '${REPO_PATH}/pkg/version.Version=${RELEASE_VERSION}'"
-IMAGE_NAME?=mpioperator/mpi-operator
+IMAGE_NAME?=docker.io/mpioperator
 KUBEBUILDER_ASSETS_PATH := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))bin/kubebuilder/bin
 KIND_VERSION=v0.18.0
 HELM_VERSION=v3.11.2
@@ -41,12 +41,13 @@ GOOS=$(shell go env GOOS)
 # Use go.mod go version as a single source of truth of scheduler-plugins version.
 SCHEDULER_PLUGINS_VERSION?=$(shell awk '/scheduler-plugins/{print $$2}' go.mod|head -n1)
 VOLCANO_SCHEDULER_VERSION?=$(shell go list -m -f "{{.Version}}" volcano.sh/apis)
+BUILD_MODE?=all
 
 CRD_OPTIONS ?= "crd:generateEmbeddedObjectMeta=true"
 
-build: all
+all: ${BIN_DIR} fmt vet tidy manifest lint test mpi-operator.v2 
 
-all: ${BIN_DIR} fmt vet tidy lint test mpi-operator.v2
+dev: ${BIN_DIR} fmt vet tidy mpi-operator.v2
 
 .PHONY: mpi-operator.v2
 mpi-operator.v2:
@@ -57,11 +58,15 @@ ${BIN_DIR}:
 
 .PHONY: fmt
 fmt:
+	shfmt -w pkg/controller/launch.sh || true
 	go fmt ./...
 
 .PHONY: vet
 vet:
 	go vet ./...
+
+.PHONY: build
+build: fmt vet mpi-operator.v2
 
 .PHONY: test
 test:
@@ -87,7 +92,7 @@ generate:
 	go generate ./pkg/... ./cmd/...
 	hack/update-codegen.sh
 	$(MAKE) manifest
-	hack/python-sdk/gen-sdk.sh
+	#hack/python-sdk/gen-sdk.sh
 
 .PHONY: verify-generate
 verify-generate: generate
@@ -100,7 +105,7 @@ clean:
 .PHONY: images
 images:
 	@echo "VERSION: ${RELEASE_VERSION}"
-	${IMG_BUILDER} build $(BUILD_ARGS) --platform $(PLATFORMS) --build-arg VERSION=${CONTROLLER_VERSION} --build-arg RELEASE_VERSION=${RELEASE_VERSION} -t ${IMAGE_NAME}:${RELEASE_VERSION} .
+	${IMG_BUILDER} build $(BUILD_ARGS) --platform $(PLATFORMS) --build-arg BUILD_MODE=${BUILD_MODE} --build-arg VERSION=${CONTROLLER_VERSION} --build-arg RELEASE_VERSION=${RELEASE_VERSION} -t ${IMAGE_NAME}:${RELEASE_VERSION} .
 
 .PHONY: test_images
 test_images:
@@ -121,7 +126,8 @@ tidy:
 
 .PHONY: lint
 lint: bin/golangci-lint ## Run golangci-lint linter
-	$(GOLANGCI_LINT) run --new-from-rev=origin/master --go 1.19
+	# $(GOLANGCI_LINT) run --new-from-rev=origin/master --go 1.19
+	$(GOLANGCI_LINT) run -v --go 1.19
 
 # Generate deploy/v2beta1/mpi-operator.yaml
 manifest: kustomize crd
@@ -138,12 +144,13 @@ bin:
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 .PHONY: bin/golangci-lint
 bin/golangci-lint: bin
-	@GOBIN=$(PROJECT_DIR)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
+	@GOBIN=$(PROJECT_DIR)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 .PHONY: envtest
 bin/envtest: bin ## Download envtest-setup locally if necessary.
-	@GOBIN=$(PROJECT_DIR)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	# @GOBIN=$(PROJECT_DIR)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	@GOBIN=$(PROJECT_DIR)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20230216140739-c98506dc3b8e
 
 bin/kubectl: bin
 	curl -L -o $(PROJECT_DIR)/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/$(GOOS)/$(GOARCH)/kubectl
