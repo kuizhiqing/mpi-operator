@@ -4,13 +4,13 @@ namespace: kubeflow
 resources:
 - cluster-role-binding.yaml
 - cluster-role.yaml
-- kubeflow.org_mpijobs.yaml
+- kubeflow.com_mpijobs.yaml
 - deployment.yaml
 - service-account.yaml
 commonLabels:
-  kustomize.component: mpi-operator
-  app: mpi-operator
-  app.kubernetes.io/name: mpi-operator
+  kustomize.component: launch-operator
+  app: launch-operator
+  app.kubernetes.io/name: launch-operator
   app.kubernetes.io/component: mpijob
 images:
 - name: mpioperator/mpi-operator

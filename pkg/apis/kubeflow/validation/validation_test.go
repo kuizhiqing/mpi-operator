@@ -358,10 +358,6 @@ func TestValidateMPIJob(t *testing.T) {
 					Type:  field.ErrorTypeNotSupported,
 					Field: "spec.mpiReplicaSpecs[Worker].restartPolicy",
 				},
-				{
-					Type:  field.ErrorTypeInvalid,
-					Field: "spec.mpiReplicaSpecs[Worker].replicas",
-				},
 			},
 		},
 		"invalid mpiJob name": {

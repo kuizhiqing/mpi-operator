@@ -34,9 +34,9 @@ type FakeMPIJobs struct {
 	ns   string
 }
 
-var mpijobsResource = schema.GroupVersionResource{Group: "kubeflow.org", Version: "v2beta1", Resource: "mpijobs"}
+var mpijobsResource = schema.GroupVersionResource{Group: "kubeflow.com", Version: "v2beta1", Resource: "mpijobs"}
 
-var mpijobsKind = schema.GroupVersionKind{Group: "kubeflow.org", Version: "v2beta1", Kind: "MPIJob"}
+var mpijobsKind = schema.GroupVersionKind{Group: "kubeflow.com", Version: "v2beta1", Kind: "MPIJob"}
 
 // Get takes name of the mPIJob, and returns the corresponding mPIJob object, and an error if there is any.
 func (c *FakeMPIJobs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v2beta1.MPIJob, err error) {

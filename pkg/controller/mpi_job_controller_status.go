@@ -15,6 +15,7 @@
 package controller
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -84,6 +85,10 @@ func hasCondition(status kubeflow.JobStatus, condType kubeflow.JobConditionType)
 	return false
 }
 
+func isAlreadyRun(status kubeflow.JobStatus) bool {
+	return isFinished(status) || isRunning(status)
+}
+
 func isFinished(status kubeflow.JobStatus) bool {
 	return isSucceeded(status) || isFailed(status)
 }
@@ -94,6 +99,10 @@ func isSucceeded(status kubeflow.JobStatus) bool {
 
 func isFailed(status kubeflow.JobStatus) bool {
 	return hasCondition(status, kubeflow.JobFailed)
+}
+
+func isRunning(status kubeflow.JobStatus) bool {
+	return hasCondition(status, kubeflow.JobRunning)
 }
 
 // setCondition updates the mpiJob to include the provided condition.
@@ -141,4 +150,28 @@ func filterOutCondition(conditions []kubeflow.JobCondition, condType kubeflow.Jo
 		newConditions = append(newConditions, c)
 	}
 	return newConditions
+}
+
+func isJobFinished(j *corev1.Pod) bool {
+	return isPodSucceeded(j) || isPodFailed(j)
+}
+
+func isPodRunning(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodRunning
+}
+
+func isPodPending(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodPending
+}
+
+func isPodFailed(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodFailed
+}
+
+func isPodSucceeded(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodSucceeded
+}
+
+func isPodEvicted(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodFailed && p.Status.Reason == "Evicted"
 }

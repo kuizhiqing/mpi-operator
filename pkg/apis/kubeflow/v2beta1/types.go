@@ -187,6 +187,9 @@ const (
 
 	// MPIReplicaTypeWorker is the type for worker replicas.
 	MPIReplicaTypeWorker MPIReplicaType = "Worker"
+
+	// MPIReplicaTypeHorker is the type for heterogeneous worker replicas.
+	MPIReplicaTypeHorker MPIReplicaType = "Horker"
 )
 
 type MPIImplementation string
