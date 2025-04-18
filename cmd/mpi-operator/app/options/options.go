@@ -52,7 +52,7 @@ func (s *ServerOption) AddFlags(fs *flag.FlagSet) {
 		`The url of the Kubernetes API server,
 		 will overrides any value in kubeconfig, only required if out-of-cluster.`)
 
-	fs.StringVar(&s.Kubeconfig, "kubeConfig", "",
+	fs.StringVar(&s.Kubeconfig, "kube-config", "",
 		"Path to a kubeConfig. Only required if out-of-cluster.")
 
 	fs.StringVar(&s.Namespace, "namespace", os.Getenv(v2beta1.EnvKubeflowNamespace),

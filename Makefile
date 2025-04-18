@@ -44,9 +44,12 @@ VOLCANO_SCHEDULER_VERSION?=$(shell go list -m -f "{{.Version}}" volcano.sh/apis)
 
 CRD_OPTIONS ?= "crd:generateEmbeddedObjectMeta=true"
 
-build: all
+build: dev
 
 all: ${BIN_DIR} fmt vet tidy lint test mpi-operator.v2
+
+dev: ${BIN_DIR} fmt vet tidy lint mpi-operator.v2
+
 
 .PHONY: mpi-operator.v2
 mpi-operator.v2:
