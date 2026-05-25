@@ -53,7 +53,7 @@ func validateMPIJobName(job *kubeflow.MPIJob) field.ErrorList {
 	var allErrs field.ErrorList
 	var replicas int32 = 1
 	if workerSpec := job.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker]; workerSpec != nil {
-		if workerSpec.Replicas != nil && *workerSpec.Replicas > 0 {
+		if workerSpec.Replicas != nil && *workerSpec.Replicas >= 0 {
 			replicas = *workerSpec.Replicas
 		}
 	}
@@ -108,37 +108,25 @@ func validateMPIReplicaSpecs(replicaSpecs map[kubeflow.MPIReplicaType]*kubeflow.
 		return errs
 	}
 	errs = append(errs, validateLauncherReplicaSpec(replicaSpecs[kubeflow.MPIReplicaTypeLauncher], path.Key(string(kubeflow.MPIReplicaTypeLauncher)))...)
-	errs = append(errs, validateWorkerReplicaSpec(replicaSpecs[kubeflow.MPIReplicaTypeWorker], path.Key(string(kubeflow.MPIReplicaTypeWorker)))...)
+	errs = append(errs, validateReplicaSpec(replicaSpecs[kubeflow.MPIReplicaTypeWorker], path.Key(string(kubeflow.MPIReplicaTypeWorker)))...)
+	errs = append(errs, validateReplicaSpec(replicaSpecs[kubeflow.MPIReplicaTypeHorker], path.Key(string(kubeflow.MPIReplicaTypeHorker)))...)
 	return errs
 }
 
 func validateLauncherReplicaSpec(spec *kubeflow.ReplicaSpec, path *field.Path) field.ErrorList {
 	var errs field.ErrorList
-	if spec == nil {
-		errs = append(errs, field.Required(path, fmt.Sprintf("must have %s replica spec", kubeflow.MPIReplicaTypeLauncher)))
-		return errs
-	}
 	errs = append(errs, validateReplicaSpec(spec, path)...)
-	if spec.Replicas != nil && *spec.Replicas != 1 {
+	if spec != nil && spec.Replicas != nil && *spec.Replicas != 1 {
 		errs = append(errs, field.Invalid(path.Child("replicas"), *spec.Replicas, "must be 1"))
-	}
-	return errs
-}
-
-func validateWorkerReplicaSpec(spec *kubeflow.ReplicaSpec, path *field.Path) field.ErrorList {
-	var errs field.ErrorList
-	if spec == nil {
-		return errs
-	}
-	errs = append(errs, validateReplicaSpec(spec, path)...)
-	if spec.Replicas != nil && *spec.Replicas <= 0 {
-		errs = append(errs, field.Invalid(path.Child("replicas"), *spec.Replicas, "must be greater than or equal to 1"))
 	}
 	return errs
 }
 
 func validateReplicaSpec(spec *kubeflow.ReplicaSpec, path *field.Path) field.ErrorList {
 	var errs field.ErrorList
+	if spec == nil {
+		return errs
+	}
 	if spec.Replicas == nil {
 		errs = append(errs, field.Required(path.Child("replicas"), "must define number of replicas"))
 	}

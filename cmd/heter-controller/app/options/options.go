@@ -21,27 +21,20 @@ import (
 	"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
 )
 
-const (
-	GangSchedulerVolcano          = "volcano"
-	GangSchedulerSchedulerPlugins = "scheduler-plugins"
-)
-
 // ServerOption is the main context object for the controller manager.
 type ServerOption struct {
-	Kubeconfig         string
-	MasterURL          string
-	Threadiness        int
-	RestartLimit       int
-	MonitoringPort     int
-	PrintVersion       bool
-	GangSchedulingName string
-	Namespace          string
-	LockNamespace      string
-	LockName           string
-	QPS                int
-	Burst              int
-	ExcludeNamespaces  string
-	IncludeNamespaces  string
+	Kubeconfig        string
+	MasterURL         string
+	Threadiness       int
+	MonitoringPort    int
+	PrintVersion      bool
+	Namespace         string
+	LockNamespace     string
+	LockName          string
+	QPS               int
+	Burst             int
+	ExcludeNamespaces string
+	IncludeNamespaces string
 }
 
 // NewServerOption creates a new CMServer with a default config.
@@ -66,21 +59,14 @@ func (s *ServerOption) AddFlags(fs *flag.FlagSet) {
 	fs.IntVar(&s.Threadiness, "threadiness", 2,
 		`How many threads to process the main logic`)
 
-	fs.IntVar(&s.RestartLimit, "restart-limit", 5,
-		`How many times the lancher can be restart.`)
-
 	fs.BoolVar(&s.PrintVersion, "version", false, "Show version and quit")
 
 	fs.IntVar(&s.MonitoringPort, "monitoring-port", 0,
 		`Endpoint port for displaying monitoring metrics. It can be set to "0" to disable the metrics serving.`)
 
-	fs.StringVar(&s.GangSchedulingName, "gang-scheduling", "",
-		`Set gang scheduler name if enable gang scheduling. Now Supporting volcano and scheduler-plugins.
-                Note: If you set another scheduler name, the mpi-operator assumes it's the scheduler-plugins`)
-
 	fs.StringVar(&s.LockNamespace, "lock-namespace", "mpi-operator", "Set locked namespace name while enabling leader election.")
 
-	fs.StringVar(&s.LockName, "lock-name", "mpi-operator", "Set locked name to distinct two deployments.")
+	fs.StringVar(&s.LockName, "lock-name", "heter-controller", "Set locked name to distinct two deployments.")
 
 	fs.IntVar(&s.QPS, "kube-api-qps", 5, "QPS indicates the maximum QPS to the master from this client.")
 	fs.IntVar(&s.Burst, "kube-api-burst", 10, "Maximum burst for throttle.")

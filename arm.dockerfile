@@ -1,18 +1,15 @@
 FROM golang:1.19 AS build
 
-# Set mpi-operator version
-# Defaults to v2
 ARG VERSION=v2
 ARG RELEASE_VERSION
 ARG BUILD_MODE
 
 ADD . /go/src/github.com/kubeflow/mpi-operator
 WORKDIR /go/src/github.com/kubeflow/mpi-operator
-# RUN make RELEASE_VERSION=${RELEASE_VERSION} ${BUILD_MODE}
-RUN make RELEASE_VERSION=${RELEASE_VERSION} mpi-operator.v2
+RUN GOOS=linux GOARCH=arm64 go build -o _output/cmd/bin/mpi-operator.v2 ./cmd/mpi-operator
 RUN ln -s mpi-operator.${VERSION} _output/cmd/bin/mpi-operator
 
-FROM gcr.io/distroless/base-debian10:latest
+FROM --platform=linux/arm64 gcr.io/distroless/base-debian10:latest
 
 ENV CONTROLLER_VERSION=$VERSION
 COPY --from=build /go/src/github.com/kubeflow/mpi-operator/_output/cmd/bin/* /opt/

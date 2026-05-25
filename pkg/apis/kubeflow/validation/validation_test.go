@@ -244,28 +244,6 @@ func TestValidateMPIJob(t *testing.T) {
 				},
 			},
 		},
-		"empty replica specs": {
-			job: kubeflow.MPIJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "foo",
-				},
-				Spec: kubeflow.MPIJobSpec{
-					SlotsPerWorker: newInt32(2),
-					RunPolicy: kubeflow.RunPolicy{
-						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
-					},
-					SSHAuthMountPath:  "/root/.ssh",
-					MPIImplementation: kubeflow.MPIImplementationOpenMPI,
-					MPIReplicaSpecs:   map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{},
-				},
-			},
-			wantErrs: field.ErrorList{
-				&field.Error{
-					Type:  field.ErrorTypeRequired,
-					Field: "spec.mpiReplicaSpecs[Launcher]",
-				},
-			},
-		},
 		"missing replica spec fields": {
 			job: kubeflow.MPIJob{
 				ObjectMeta: metav1.ObjectMeta{
@@ -357,10 +335,6 @@ func TestValidateMPIJob(t *testing.T) {
 				{
 					Type:  field.ErrorTypeNotSupported,
 					Field: "spec.mpiReplicaSpecs[Worker].restartPolicy",
-				},
-				{
-					Type:  field.ErrorTypeInvalid,
-					Field: "spec.mpiReplicaSpecs[Worker].replicas",
 				},
 			},
 		},

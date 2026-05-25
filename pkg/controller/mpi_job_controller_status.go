@@ -15,7 +15,7 @@
 package controller
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
@@ -34,8 +34,6 @@ const (
 	mpiJobResumedReason = "MPIJobResumed"
 	// mpiJobFailedReason is added in a mpijob when it is failed.
 	mpiJobFailedReason = "MPIJobFailed"
-	// mpiJobEvict
-	mpiJobEvict = "MPIJobEvicted"
 )
 
 // initializeMPIJobStatuses initializes the ReplicaStatuses for MPIJob.
@@ -48,13 +46,13 @@ func initializeMPIJobStatuses(mpiJob *kubeflow.MPIJob, mtype kubeflow.MPIReplica
 }
 
 // updateMPIJobConditions updates the conditions of the given mpiJob.
-func updateMPIJobConditions(mpiJob *kubeflow.MPIJob, conditionType kubeflow.JobConditionType, status v1.ConditionStatus, reason, message string) bool {
+func updateMPIJobConditions(mpiJob *kubeflow.MPIJob, conditionType kubeflow.JobConditionType, status corev1.ConditionStatus, reason, message string) bool {
 	condition := newCondition(conditionType, status, reason, message)
 	return setCondition(&mpiJob.Status, condition)
 }
 
 // newCondition creates a new mpiJob condition.
-func newCondition(conditionType kubeflow.JobConditionType, status v1.ConditionStatus, reason, message string) kubeflow.JobCondition {
+func newCondition(conditionType kubeflow.JobConditionType, status corev1.ConditionStatus, reason, message string) kubeflow.JobCondition {
 	return kubeflow.JobCondition{
 		Type:               conditionType,
 		Status:             status,
@@ -77,11 +75,15 @@ func getCondition(status kubeflow.JobStatus, condType kubeflow.JobConditionType)
 
 func hasCondition(status kubeflow.JobStatus, condType kubeflow.JobConditionType) bool {
 	for _, condition := range status.Conditions {
-		if condition.Type == condType && condition.Status == v1.ConditionTrue {
+		if condition.Type == condType && condition.Status == corev1.ConditionTrue {
 			return true
 		}
 	}
 	return false
+}
+
+func isAlreadyRun(status kubeflow.JobStatus) bool {
+	return isFinished(status) || isRunning(status)
 }
 
 func isFinished(status kubeflow.JobStatus) bool {
@@ -94,6 +96,10 @@ func isSucceeded(status kubeflow.JobStatus) bool {
 
 func isFailed(status kubeflow.JobStatus) bool {
 	return hasCondition(status, kubeflow.JobFailed)
+}
+
+func isRunning(status kubeflow.JobStatus) bool {
+	return hasCondition(status, kubeflow.JobRunning)
 }
 
 // setCondition updates the mpiJob to include the provided condition.
@@ -135,10 +141,34 @@ func filterOutCondition(conditions []kubeflow.JobCondition, condType kubeflow.Jo
 
 		// Set the running condition status to be false when current condition failed or succeeded
 		if (condType == kubeflow.JobFailed || condType == kubeflow.JobSucceeded) && (c.Type == kubeflow.JobRunning || c.Type == kubeflow.JobFailed) {
-			c.Status = v1.ConditionFalse
+			c.Status = corev1.ConditionFalse
 		}
 
 		newConditions = append(newConditions, c)
 	}
 	return newConditions
+}
+
+func isJobFinished(j *corev1.Pod) bool {
+	return isPodSucceeded(j) || isPodFailed(j)
+}
+
+func isPodRunning(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodRunning
+}
+
+func isPodPending(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodPending
+}
+
+func isPodFailed(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodFailed
+}
+
+func isPodSucceeded(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodSucceeded
+}
+
+func isPodEvicted(p *corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodFailed && p.Status.Reason == "Evicted"
 }

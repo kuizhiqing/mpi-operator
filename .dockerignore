@@ -10,9 +10,6 @@ profile.cov
 Dockerfile
 .gitignore
 .github/
-deploy/
 examples/
-hack/
-manifests/
 proposals/
 sdk/

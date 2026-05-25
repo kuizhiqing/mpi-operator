@@ -39,10 +39,8 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
-	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
-	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
-	"github.com/kubeflow/mpi-operator/cmd/mpi-operator/app/options"
+	"github.com/kubeflow/mpi-operator/cmd/heter-controller/app/options"
 	mpijobclientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
 	kubeflowscheme "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
 	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
@@ -53,7 +51,7 @@ import (
 const (
 	apiVersion                   = "v2"
 	RecommendedKubeConfigPathEnv = "KUBECONFIG"
-	controllerName               = "mpi-operator"
+	controllerName               = "heter-controller"
 )
 
 var (
@@ -62,7 +60,7 @@ var (
 	renewDuration = 5 * time.Second
 	retryPeriod   = 3 * time.Second
 	// leader election health check
-	healthCheckPort = 8080
+	healthCheckPort = 8060
 	// This is the timeout that determines the time beyond the lease expiry to be
 	// allowed for timeout. Checks within the timeout period after the lease
 	// expires will still return healthy.
@@ -71,8 +69,8 @@ var (
 
 var (
 	isLeader = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "mpi_operator_is_leader",
-		Help: "Is this client the leader of this mpi-operator client set?",
+		Name: "heter_controller_is_leader",
+		Help: "Is this client the leader of this heter-controller client set?",
 	})
 )
 
@@ -114,7 +112,7 @@ func Run(opt *options.ServerOption) error {
 	cfg.Burst = opt.Burst
 
 	// Create clients.
-	kubeClient, leaderElectionClientSet, mpiJobClientSet, volcanoClientSet, schedClientSet, err := createClientSets(cfg, opt.GangSchedulingName)
+	kubeClient, leaderElectionClientSet, mpiJobClientSet, err := createClientSets(cfg)
 	if err != nil {
 		return err
 	}
@@ -141,30 +139,17 @@ func Run(opt *options.ServerOption) error {
 		kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeClient, 0, kubeInformerFactoryOpts...)
 		kubeflowInformerFactory := informers.NewSharedInformerFactoryWithOptions(mpiJobClientSet, 0, kubeflowInformerFactoryOpts...)
 
-		controller := controllersv1.NewMPIJobController(
+		controller := controllersv1.NewHeterJobController(
 			kubeClient,
 			mpiJobClientSet,
-			volcanoClientSet,
-			schedClientSet,
-			kubeInformerFactory.Core().V1().Events(),
-			kubeInformerFactory.Core().V1().ConfigMaps(),
-			kubeInformerFactory.Core().V1().Secrets(),
-			kubeInformerFactory.Core().V1().Services(),
-			kubeInformerFactory.Core().V1().Pods(),
-			kubeInformerFactory.Scheduling().V1().PriorityClasses(),
 			kubeflowInformerFactory.Kubeflow().V2beta1().MPIJobs(),
 			namespace,
-			opt.GangSchedulingName,
 			opt.ExcludeNamespaces,
 			opt.IncludeNamespaces,
-			opt.RestartLimit,
 		)
 
 		go kubeInformerFactory.Start(ctx.Done())
 		go kubeflowInformerFactory.Start(ctx.Done())
-		if controller.PodGroupCtrl != nil {
-			controller.PodGroupCtrl.StartInformerFactory(ctx.Done())
-		}
 
 		// Set leader election start function.
 		isLeader.Set(1)
@@ -249,7 +234,7 @@ func Run(opt *options.ServerOption) error {
 				klog.Infof("New leader has been elected: %s", identity)
 			},
 		},
-		Name:     "mpi-operator",
+		Name:     "heter-controller",
 		WatchDog: electionChecker,
 	})
 
@@ -258,46 +243,29 @@ func Run(opt *options.ServerOption) error {
 
 func createClientSets(
 	config *restclientset.Config,
-	gangSchedulingName string,
 ) (
 	kubeclientset.Interface,
 	kubeclientset.Interface,
 	mpijobclientset.Interface,
-	volcanoclient.Interface,
-	schedclientset.Interface,
 	error,
 ) {
 
-	kubeClientSet, err := kubeclientset.NewForConfig(restclientset.AddUserAgent(config, "mpi-operator"))
+	kubeClientSet, err := kubeclientset.NewForConfig(restclientset.AddUserAgent(config, "heter-controller"))
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	leaderElectionClientSet, err := kubeclientset.NewForConfig(restclientset.AddUserAgent(config, "leader-election"))
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	mpiJobClientSet, err := mpijobclientset.NewForConfig(config)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	var (
-		volcanoClientSet volcanoclient.Interface
-		schedClientSet   schedclientset.Interface
-	)
-	if gangSchedulingName == options.GangSchedulerVolcano {
-		if volcanoClientSet, err = volcanoclient.NewForConfig(restclientset.AddUserAgent(config, "volcano")); err != nil {
-			return nil, nil, nil, nil, nil, err
-		}
-	} else if len(gangSchedulingName) != 0 {
-		if schedClientSet, err = schedclientset.NewForConfig(restclientset.AddUserAgent(config, "scheduler-plugins")); err != nil {
-			return nil, nil, nil, nil, nil, err
-		}
-	}
-
-	return kubeClientSet, leaderElectionClientSet, mpiJobClientSet, volcanoClientSet, schedClientSet, nil
+	return kubeClientSet, leaderElectionClientSet, mpiJobClientSet, nil
 }
 
 func checkCRDExists(clientset mpijobclientset.Interface, namespace string) bool {

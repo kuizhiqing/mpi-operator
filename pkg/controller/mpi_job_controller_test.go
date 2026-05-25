@@ -7,8 +7,7 @@
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
@@ -22,31 +21,52 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
-	clocktesting "k8s.io/utils/clock/testing"
-	"k8s.io/utils/pointer"
 	schedv1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanofake "volcano.sh/apis/pkg/client/clientset/versioned/fake"
 
 	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
 	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/fake"
 	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
 	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
+)
+
+const (
+	discover_hosts_tmp = "#!/bin/sh\ncat /etc/mpi/hostfile | awk '{print $1}'\n"
+	ssh_config_tmp     = `LogLevel ERROR
+Host *
+    Port 36000
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+`
+	sshd_config_tmp = `StrictModes no
+HostKey /etc/ssh/ssh_host_rsa_key
+PermitUserEnvironment yes
+AcceptEnv *
+UsePAM yes
+AllowUsers root
+PermitRootLogin yes
+PasswordAuthentication no
+Port 36000
+ListenAddress 0.0.0.0
+`
 )
 
 var (
@@ -110,18 +130,6 @@ func newMPIJobCommon(name string, startTime, completionTime *metav1.Time) *kubef
 				CleanPodPolicy: &cleanPodPolicyAll,
 			},
 			MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
-				kubeflow.MPIReplicaTypeWorker: {
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{
-									Name:  "foo",
-									Image: "bar",
-								},
-							},
-						},
-					},
-				},
 				kubeflow.MPIReplicaTypeLauncher: {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
@@ -133,6 +141,7 @@ func newMPIJobCommon(name string, startTime, completionTime *metav1.Time) *kubef
 							},
 						},
 					},
+					Replicas: newInt32(1),
 				},
 			},
 		},
@@ -151,7 +160,95 @@ func newMPIJobCommon(name string, startTime, completionTime *metav1.Time) *kubef
 
 func newMPIJob(name string, replicas *int32, startTime, completionTime *metav1.Time) *kubeflow.MPIJob {
 	mpiJob := newMPIJobCommon(name, startTime, completionTime)
-	mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker].Replicas = replicas
+	if *replicas > 0 {
+		mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker] =
+			&kubeflow.ReplicaSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "foo",
+								Image: "bar",
+							},
+						},
+					},
+				},
+				Replicas: replicas,
+			}
+	}
+	return mpiJob
+}
+
+func newHeterJob(name string, hasLauncher bool, workerN *int32, horkerN *int32, startTime, completionTime *metav1.Time) *kubeflow.MPIJob {
+	cleanPodPolicyAll := kubeflow.CleanPodPolicyAll
+	mpiJob := &kubeflow.MPIJob{
+		TypeMeta: metav1.TypeMeta{APIVersion: kubeflow.SchemeGroupVersion.String()},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: metav1.NamespaceDefault,
+		},
+		Spec: kubeflow.MPIJobSpec{
+			RunPolicy: kubeflow.RunPolicy{
+				CleanPodPolicy: &cleanPodPolicyAll,
+			},
+			MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{},
+		},
+		Status: kubeflow.JobStatus{},
+	}
+	if startTime != nil {
+		mpiJob.Status.StartTime = startTime
+	}
+	if completionTime != nil {
+		mpiJob.Status.CompletionTime = completionTime
+	}
+
+	if hasLauncher {
+		mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeLauncher] = &kubeflow.ReplicaSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "foo",
+							Image: "bar",
+						},
+					},
+				},
+			},
+			Replicas: newInt32(1),
+		}
+	}
+	if *workerN > 0 {
+		mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker] =
+			&kubeflow.ReplicaSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "foo",
+								Image: "bar",
+							},
+						},
+					},
+				},
+				Replicas: workerN,
+			}
+	}
+	if *horkerN > 0 {
+		mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeHorker] =
+			&kubeflow.ReplicaSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "foo",
+								Image: "bar",
+							},
+						},
+					},
+				},
+				Replicas: horkerN,
+			}
+	}
 	return mpiJob
 }
 
@@ -166,18 +263,22 @@ func (f *fixture) newController(clock clock.WithTicker) (*MPIJobController, info
 		f.client,
 		f.volcanoClient,
 		f.schedClient,
+		k8sI.Core().V1().Events(),
 		k8sI.Core().V1().ConfigMaps(),
 		k8sI.Core().V1().Secrets(),
 		k8sI.Core().V1().Services(),
-		k8sI.Batch().V1().Jobs(),
 		k8sI.Core().V1().Pods(),
 		k8sI.Scheduling().V1().PriorityClasses(),
 		i.Kubeflow().V2beta1().MPIJobs(),
 		clock,
 		metav1.NamespaceAll,
 		f.gangSchedulingName,
+		"",
+		"",
+		5,
 	)
 
+	c.eventSynced = alwaysReady
 	c.configMapSynced = alwaysReady
 	c.serviceSynced = alwaysReady
 	c.secretSynced = alwaysReady
@@ -327,26 +428,28 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 		return
 	}
 
-	//nolint
-	switch a := actual.(type) {
-	case core.UpdateAction:
+	switch {
+	case actual.GetVerb() == "update":
 		e, _ := expected.(core.UpdateAction)
+		a, _ := actual.(core.UpdateAction)
 		expObject := e.GetObject()
 		object := a.GetObject()
 
 		if diff := cmp.Diff(expObject, object, ignoreSecretEntries, ignoreConditionTimes); diff != "" {
 			t.Errorf("Action %s %s has wrong object (-want +got):\n %s", a.GetVerb(), a.GetResource().Resource, diff)
 		}
-	case core.CreateAction:
+	case actual.GetVerb() == "create":
 		e, _ := expected.(core.CreateAction)
+		a, _ := actual.(core.CreateAction)
 		expObject := e.GetObject()
 		object := a.GetObject()
 
 		if diff := cmp.Diff(expObject, object, ignoreSecretEntries); diff != "" {
 			t.Errorf("Action %s %s has wrong object (-want +got):\n %s", a.GetVerb(), a.GetResource().Resource, diff)
 		}
-	case core.PatchAction:
+	case actual.GetVerb() == "patch":
 		e, _ := expected.(core.PatchAction)
+		a, _ := actual.(core.PatchAction)
 		expPatch := e.GetPatch()
 		patch := a.GetPatch()
 
@@ -362,23 +465,10 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 func filterInformerActions(actions []core.Action) []core.Action {
 	var ret []core.Action
 	for _, action := range actions {
-		if len(action.GetNamespace()) == 0 &&
-			(action.Matches("list", "configmaps") ||
-				action.Matches("watch", "configmaps") ||
-				action.Matches("list", "services") ||
-				action.Matches("watch", "services") ||
-				action.Matches("list", "secrets") ||
-				action.Matches("watch", "secrets") ||
-				action.Matches("list", "jobs") ||
-				action.Matches("watch", "jobs") ||
-				action.Matches("list", "pods") ||
-				action.Matches("watch", "pods") ||
-				action.Matches("list", "podgroups") ||
-				action.Matches("watch", "podgroups") ||
-				action.Matches("list", "priorityclasses") ||
-				action.Matches("watch", "priorityclasses") ||
-				action.Matches("list", "mpijobs") ||
-				action.Matches("watch", "mpijobs")) {
+		if len(action.GetNamespace()) == 0 && validAction(action) {
+			continue
+		}
+		if action.GetResource().Resource == "events" {
 			continue
 		}
 		ret = append(ret, action)
@@ -387,13 +477,8 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	return ret
 }
 
-func (f *fixture) expectCreateJobAction(d *batchv1.Job) {
-	f.kubeActions = append(f.kubeActions, core.NewCreateAction(schema.GroupVersionResource{Resource: "jobs", Group: "batch"}, d.Namespace, d))
-}
-
-func (f *fixture) expectUpdateJobAction(job *batchv1.Job) {
-	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "jobs", Group: "batch", Version: "v1"}, job.Namespace, job)
-	f.kubeActions = append(f.kubeActions, action)
+func validAction(action core.Action) bool {
+	return action.GetVerb() == "list" || action.GetVerb() == "watch"
 }
 
 func (f *fixture) expectCreatePodAction(d *corev1.Pod) {
@@ -423,14 +508,9 @@ func (f *fixture) setUpMPIJob(mpiJob *kubeflow.MPIJob) {
 	f.objects = append(f.objects, mpiJob)
 }
 
-func (f *fixture) setUpLauncher(launcher *batchv1.Job) {
-	f.jobLister = append(f.jobLister, launcher)
-	f.kubeObjects = append(f.kubeObjects, launcher)
-}
-
-func (f *fixture) setUpPod(worker *corev1.Pod) {
-	f.podLister = append(f.podLister, worker)
-	f.kubeObjects = append(f.kubeObjects, worker)
+func (f *fixture) setUpPod(pod *corev1.Pod) {
+	f.podLister = append(f.podLister, pod)
+	f.kubeObjects = append(f.kubeObjects, pod)
 }
 
 func (f *fixture) setUpConfigMap(configMap *corev1.ConfigMap) {
@@ -498,6 +578,136 @@ func TestDoNothingWithInvalidMPIJob(t *testing.T) {
 	f.run(getKey(mpiJob, t))
 }
 
+func TestLauncherNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+
+	fmjc := f.newFakeMPIJobController()
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
+	launcher.OwnerReferences = nil
+	f.setUpPod(launcher)
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
+func TestConfigMapNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	var replicas int32 = 64
+	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+	f.setUpService(newJobService(mpiJob))
+
+	configMap := newConfigMap(mpiJob)
+	configMap.OwnerReferences = nil
+	f.setUpConfigMap(configMap)
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
+func TestWorkerServiceNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	var replicas int32 = 2
+	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	service := newJobService(mpiJobCopy)
+	service.OwnerReferences = nil
+	f.setUpService(service)
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
+func TestLauncherServiceNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	var replicas int32 = 2
+	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	mpiJob.Spec.MPIImplementation = kubeflow.MPIImplementationIntel
+	f.setUpMPIJob(mpiJob)
+
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	service := newJobService(mpiJobCopy)
+	service.OwnerReferences = nil
+	f.setUpService(service)
+	configMap := newConfigMap(mpiJobCopy)
+	secret, err := newSSHAuthSecret(mpiJobCopy)
+	tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+	tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+	if err != nil {
+		t.Fatalf("Creating SSH auth Secret: %v", err)
+	}
+	f.setUpSecret(secret)
+	f.setUpConfigMap(configMap)
+	f.setUpConfigMap(tjCM)
+	fmjc := f.newFakeMPIJobController()
+	for i := 0; i < int(replicas); i++ {
+		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
+		f.setUpPod(worker)
+	}
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
+func TestSecretNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	var replicas int32 = 64
+	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	configMap := newConfigMap(mpiJobCopy)
+	f.setUpConfigMap(configMap)
+	f.setUpService(newJobService(mpiJobCopy))
+
+	secret, err := newSSHAuthSecret(mpiJobCopy)
+	if err != nil {
+		t.Fatalf("Creating SSH auth Secret: %v", err)
+	}
+	secret.OwnerReferences = nil
+	f.setUpSecret(secret)
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
+func TestPriorityCheck(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+
+	fmjc := f.newFakeMPIJobController()
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
+	launcher.OwnerReferences = nil
+	f.setUpPod(launcher)
+
+	f.runExpectError(getKey(mpiJob, t))
+}
+
 func TestAllResourcesCreated(t *testing.T) {
 	impls := []kubeflow.MPIImplementation{kubeflow.MPIImplementationOpenMPI, kubeflow.MPIImplementationIntel, kubeflow.MPIImplementationMPICH}
 	for _, implementation := range impls {
@@ -511,52 +721,33 @@ func TestAllResourcesCreated(t *testing.T) {
 			fmjc := f.newFakeMPIJobController()
 			mpiJobCopy := mpiJob.DeepCopy()
 			scheme.Scheme.Default(mpiJobCopy)
-			f.expectCreateServiceAction(newWorkersService(mpiJobCopy))
-			cfgMap := newConfigMap(mpiJobCopy, 5)
-			updateDiscoverHostsInConfigMap(cfgMap, mpiJob, nil)
+			f.expectCreateServiceAction(newJobService(mpiJobCopy))
+			cfgMap := newConfigMap(mpiJobCopy)
 			f.expectCreateConfigMapAction(cfgMap)
 			secret, err := newSSHAuthSecret(mpiJobCopy)
 			if err != nil {
 				t.Fatalf("Failed creating secret")
 			}
 			f.expectCreateSecretAction(secret)
+			tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+			tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+			f.expectCreateConfigMapAction(tjCM)
 			for i := 0; i < 5; i++ {
-				f.expectCreatePodAction(fmjc.newWorker(mpiJobCopy, i))
+				f.expectCreatePodAction(fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker))
 			}
-			if implementation == kubeflow.MPIImplementationIntel ||
-				implementation == kubeflow.MPIImplementationMPICH {
-				f.expectCreateServiceAction(newLauncherService(mpiJobCopy))
-			}
-			f.expectCreateJobAction(fmjc.newLauncherJob(mpiJobCopy))
+			f.expectCreatePodAction(fmjc.newLauncherPod(mpiJobCopy))
 
 			mpiJobCopy.Status.Conditions = []kubeflow.JobCondition{newCondition(kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, "MPIJob default/foo is created.")}
 			mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 				kubeflow.MPIReplicaTypeLauncher: {},
 				kubeflow.MPIReplicaTypeWorker:   {},
+				kubeflow.MPIReplicaTypeHorker:   {},
 			}
 			f.expectUpdateMPIJobStatusAction(mpiJobCopy)
 
 			f.run(getKey(mpiJob, t))
 		})
 	}
-}
-
-func TestLauncherNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
-
-	fmjc := f.newFakeMPIJobController()
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcher.OwnerReferences = nil
-	f.setUpLauncher(launcher)
-
-	f.runExpectError(getKey(mpiJob, t))
 }
 
 func TestLauncherSucceeded(t *testing.T) {
@@ -571,12 +762,9 @@ func TestLauncherSucceeded(t *testing.T) {
 	fmjc := f.newFakeMPIJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcher.Status.Conditions = append(launcher.Status.Conditions, batchv1.JobCondition{
-		Type:   batchv1.JobComplete,
-		Status: corev1.ConditionTrue,
-	})
-	f.setUpLauncher(launcher)
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
+	launcher.Status.Phase = corev1.PodSucceeded
+	f.setUpPod(launcher)
 
 	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 		kubeflow.MPIReplicaTypeLauncher: {
@@ -585,6 +773,7 @@ func TestLauncherSucceeded(t *testing.T) {
 			Failed:    0,
 		},
 		kubeflow.MPIReplicaTypeWorker: {},
+		kubeflow.MPIReplicaTypeHorker: {},
 	}
 
 	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
@@ -609,425 +798,36 @@ func TestLauncherFailed(t *testing.T) {
 	fmjc := f.newFakeMPIJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcher.Status.Conditions = append(launcher.Status.Conditions, batchv1.JobCondition{
-		Type:    batchv1.JobFailed,
-		Status:  corev1.ConditionTrue,
-		Reason:  jobBackoffLimitExceededReason,
-		Message: "Job has reached the specified backoff limit",
-	})
-	launcher.Status.Failed = 2
-	f.setUpLauncher(launcher)
-
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
 	now := time.Now()
-	launcherPod1 := mockJobPod(launcher)
-	launcherPod1.Status.Phase = corev1.PodFailed
-	launcherPod1.Status.Reason = "FailedReason1"
-	launcherPod1.Status.Message = "first message"
-	launcherPod1.CreationTimestamp = metav1.NewTime(now)
-	f.setUpPod(launcherPod1)
-	launcherPod2 := mockJobPod(launcher)
-	launcherPod2.Status.Phase = corev1.PodFailed
-	launcherPod2.Status.Reason = "FailedReason2"
-	launcherPod2.Status.Message = "second message"
-	launcherPod2.CreationTimestamp = metav1.NewTime(now.Add(time.Second))
-	f.setUpPod(launcherPod2)
+	launcher.Status.Phase = corev1.PodFailed
+	launcher.Status.Reason = "FailedReason1"
+	launcher.Status.Message = "first message"
+	launcher.CreationTimestamp = metav1.NewTime(now)
+	f.setUpPod(launcher)
 
 	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 		kubeflow.MPIReplicaTypeLauncher: {
 			Active:    0,
 			Succeeded: 0,
-			Failed:    2,
+			Failed:    1,
 		},
 		kubeflow.MPIReplicaTypeWorker: {},
+		kubeflow.MPIReplicaTypeHorker: {},
 	}
 	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
 
 	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
 	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	msg = "Job has reached the specified backoff limit: second message"
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobFailed, corev1.ConditionTrue, jobBackoffLimitExceededReason+"/FailedReason2", msg)
+	// Reason:  "launcher-failed: FailedReason1. first message."
+	// Message: "MPIJob default/test failed: launcher-failed: FailedReason1. first message."
+	_, reason, message := fmjc.checkJobFailedWithReason(mpiJobCopy, launcher, nil, nil)
+	msg = fmt.Sprintf("MPIJob %s/%s failed: %s", mpiJob.Namespace, mpiJob.Name, message)
+	updateMPIJobConditions(mpiJobCopy, kubeflow.JobFailed, corev1.ConditionTrue, reason, msg)
 
 	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
-}
-
-func TestConfigMapNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 64
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
-	f.setUpService(newWorkersService(mpiJob))
-
-	configMap := newConfigMap(mpiJob, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJob, nil)
-	configMap.OwnerReferences = nil
-	f.setUpConfigMap(configMap)
-
-	f.runExpectError(getKey(mpiJob, t))
-}
-
-func TestWorkerServiceNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 2
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
-
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	service := newWorkersService(mpiJobCopy)
-	service.OwnerReferences = nil
-	f.setUpService(service)
-
-	f.runExpectError(getKey(mpiJob, t))
-}
-
-func TestLauncherServiceNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 2
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	mpiJob.Spec.MPIImplementation = kubeflow.MPIImplementationIntel
-	f.setUpMPIJob(mpiJob)
-
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	service := newWorkersService(mpiJobCopy)
-	f.setUpService(service)
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	secret, err := newSSHAuthSecret(mpiJobCopy)
-	if err != nil {
-		t.Fatalf("Creating SSH auth Secret: %v", err)
-	}
-	f.setUpSecret(secret)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, nil)
-	f.setUpConfigMap(configMap)
-	fmjc := f.newFakeMPIJobController()
-	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
-		f.setUpPod(worker)
-	}
-
-	service = newLauncherService(mpiJobCopy)
-	service.OwnerReferences = nil
-	f.setUpService(service)
-
-	f.runExpectError(getKey(mpiJob, t))
-}
-
-func TestSecretNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 64
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
-
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, nil)
-	f.setUpConfigMap(configMap)
-	f.setUpService(newWorkersService(mpiJobCopy))
-
-	secret, err := newSSHAuthSecret(mpiJobCopy)
-	if err != nil {
-		t.Fatalf("Creating SSH auth Secret: %v", err)
-	}
-	secret.OwnerReferences = nil
-	f.setUpSecret(secret)
-
-	f.runExpectError(getKey(mpiJob, t))
-}
-
-func TestShutdownWorker(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	msg := fmt.Sprintf("MPIJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
-
-	updateMPIJobConditions(mpiJob, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
-	f.setUpMPIJob(mpiJob)
-
-	fmjc := f.newFakeMPIJobController()
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcher.Status.Conditions = append(launcher.Status.Conditions, batchv1.JobCondition{
-		Type:   batchv1.JobComplete,
-		Status: corev1.ConditionTrue,
-	})
-	f.setUpLauncher(launcher)
-
-	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
-		f.setUpPod(worker)
-	}
-
-	for i := 0; i < int(replicas); i++ {
-		name := fmt.Sprintf("%s-%d", mpiJob.Name+workerSuffix, i)
-		f.kubeActions = append(f.kubeActions, core.NewDeleteAction(schema.GroupVersionResource{Resource: "pods"}, mpiJob.Namespace, name))
-	}
-
-	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
-		kubeflow.MPIReplicaTypeWorker: {
-			Active:    0,
-			Succeeded: 0,
-			Failed:    0,
-		},
-	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
-
-	f.run(getKey(mpiJob, t))
-}
-
-func TestCreateSuspendedMPIJob(t *testing.T) {
-	impls := []kubeflow.MPIImplementation{kubeflow.MPIImplementationOpenMPI, kubeflow.MPIImplementationIntel, kubeflow.MPIImplementationMPICH}
-	for _, implementation := range impls {
-		t.Run(string(implementation), func(t *testing.T) {
-			f := newFixture(t, "")
-
-			// create a suspended job
-			var replicas int32 = 8
-			mpiJob := newMPIJob("test", &replicas, nil, nil)
-			mpiJob.Spec.RunPolicy.Suspend = pointer.Bool(true)
-			mpiJob.Spec.MPIImplementation = implementation
-			f.setUpMPIJob(mpiJob)
-
-			// expect creation of objects
-			scheme.Scheme.Default(mpiJob)
-			f.expectCreateServiceAction(newWorkersService(mpiJob))
-			cfgMap := newConfigMap(mpiJob, replicas)
-			updateDiscoverHostsInConfigMap(cfgMap, mpiJob, nil)
-			f.expectCreateConfigMapAction(cfgMap)
-			secret, err := newSSHAuthSecret(mpiJob)
-			if err != nil {
-				t.Fatalf("Failed creating secret")
-			}
-			f.expectCreateSecretAction(secret)
-			if implementation == kubeflow.MPIImplementationIntel ||
-				implementation == kubeflow.MPIImplementationMPICH {
-				f.expectCreateServiceAction(newLauncherService(mpiJob))
-			}
-
-			// expect creating of the launcher
-			fmjc := f.newFakeMPIJobController()
-			launcher := fmjc.newLauncherJob(mpiJob)
-			launcher.Spec.Suspend = pointer.Bool(true)
-			f.expectCreateJobAction(launcher)
-
-			// expect an update to add the conditions
-			mpiJobCopy := mpiJob.DeepCopy()
-			mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
-				kubeflow.MPIReplicaTypeLauncher: {},
-				kubeflow.MPIReplicaTypeWorker:   {},
-			}
-			msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-			updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-			updateMPIJobConditions(mpiJobCopy, kubeflow.JobSuspended, corev1.ConditionTrue, mpiJobSuspendedReason, "MPIJob suspended")
-			msg = fmt.Sprintf("MPIJob %s/%s is suspended.", mpiJob.Namespace, mpiJob.Name)
-			updateMPIJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionFalse, mpiJobSuspendedReason, msg)
-			f.expectUpdateMPIJobStatusAction(mpiJobCopy)
-
-			f.run(getKey(mpiJob, t))
-		})
-	}
-}
-
-func TestSuspendedRunningMPIJob(t *testing.T) {
-	f := newFixture(t, "")
-
-	// setup a running MPIJob with a launcher
-	var replicas int32 = 8
-	startTime := metav1.Now()
-	mpiJob := newMPIJob("test", &replicas, &startTime, nil)
-	mpiJob.Spec.RunPolicy.Suspend = pointer.Bool(false)
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJob, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	msg = fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
-
-	mpiJob.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
-		kubeflow.MPIReplicaTypeLauncher: {
-			Active: 1,
-		},
-		kubeflow.MPIReplicaTypeWorker: {
-			Active: replicas,
-		},
-	}
-
-	f.setUpMPIJob(mpiJob)
-
-	// setup workers
-	fmjc := f.newFakeMPIJobController()
-	var runningPodList []*corev1.Pod
-	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJob, i)
-		worker.Status.Phase = corev1.PodRunning
-		runningPodList = append(runningPodList, worker)
-		f.setUpPod(worker)
-	}
-
-	// setup objects
-	scheme.Scheme.Default(mpiJob)
-	f.setUpService(newWorkersService(mpiJob))
-
-	cfgMap := newConfigMap(mpiJob, replicas)
-	updateDiscoverHostsInConfigMap(cfgMap, mpiJob, runningPodList)
-	f.setUpConfigMap(cfgMap)
-	secret, err := newSSHAuthSecret(mpiJob)
-	if err != nil {
-		t.Fatalf("Failed creating secret")
-	}
-	f.setUpSecret(secret)
-
-	// setup launcher and its pod
-	launcher := fmjc.newLauncherJob(mpiJob)
-	launcher.Spec.Suspend = pointer.Bool(false)
-	launcherPod := mockJobPod(launcher)
-	launcherPod.Status.Phase = corev1.PodRunning
-	f.setUpLauncher(launcher)
-	f.setUpPod(launcherPod)
-
-	// transition the MPIJob into suspended state
-	mpiJob.Spec.RunPolicy.Suspend = pointer.Bool(true)
-
-	// expect moving the launcher pod into suspended state
-	launcherCopy := launcher.DeepCopy()
-	launcherCopy.Spec.Suspend = pointer.Bool(true)
-	f.expectUpdateJobAction(launcherCopy)
-
-	// expect removal of the pods
-	for i := 0; i < int(replicas); i++ {
-		name := fmt.Sprintf("%s-%d", mpiJob.Name+workerSuffix, i)
-		f.kubeActions = append(f.kubeActions, core.NewDeleteAction(schema.GroupVersionResource{Resource: "pods"}, mpiJob.Namespace, name))
-	}
-
-	// expect MPI job status update to add the suspend condition
-	mpiJobCopy := mpiJob.DeepCopy()
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobSuspended, corev1.ConditionTrue, mpiJobSuspendedReason, "MPIJob suspended")
-	msg = fmt.Sprintf("MPIJob %s/%s is suspended.", mpiJobCopy.Namespace, mpiJobCopy.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionFalse, mpiJobSuspendedReason, msg)
-	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
-		// the launcher pod remains active. In live system it gets deleted by
-		// the launcher's Job controller.
-		kubeflow.MPIReplicaTypeLauncher: {
-			Active: 1,
-		},
-		kubeflow.MPIReplicaTypeWorker: {},
-	}
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
-
-	f.run(getKey(mpiJob, t))
-}
-
-func TestResumeMPIJob(t *testing.T) {
-	fakeClock := clocktesting.NewFakeClock(time.Now().Truncate(time.Second))
-	f := newFixture(t, "")
-
-	// create a suspended job
-	var replicas int32 = 8
-	startTime := metav1.Now()
-	mpiJob := newMPIJob("test", &replicas, &startTime, nil)
-	mpiJob.Spec.RunPolicy.Suspend = pointer.Bool(true)
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJob, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	updateMPIJobConditions(mpiJob, kubeflow.JobSuspended, corev1.ConditionTrue, mpiJobSuspendedReason, "MPIJob suspended")
-	msg = fmt.Sprintf("MPIJob %s/%s is suspended.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionFalse, mpiJobSuspendedReason, msg)
-	mpiJob.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
-		kubeflow.MPIReplicaTypeLauncher: {},
-		kubeflow.MPIReplicaTypeWorker:   {},
-	}
-	f.setUpMPIJob(mpiJob)
-
-	// expect creation of objects
-	scheme.Scheme.Default(mpiJob)
-	f.expectCreateServiceAction(newWorkersService(mpiJob))
-	cfgMap := newConfigMap(mpiJob, replicas)
-	updateDiscoverHostsInConfigMap(cfgMap, mpiJob, nil)
-	f.setUpConfigMap(cfgMap)
-	secret, err := newSSHAuthSecret(mpiJob)
-	if err != nil {
-		t.Fatalf("Failed creating secret")
-	}
-	f.setUpSecret(secret)
-
-	// expect creating of the launcher
-	fmjc := f.newFakeMPIJobController()
-	launcher := fmjc.newLauncherJob(mpiJob)
-	launcher.Spec.Suspend = pointer.Bool(true)
-	f.setUpLauncher(launcher)
-
-	// move the timer by a second so that the StartTime is updated after resume
-	fakeClock.Sleep(time.Second)
-
-	// resume the MPIJob
-	mpiJob.Spec.RunPolicy.Suspend = pointer.Bool(false)
-
-	// expect creation of the pods
-	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJob, i)
-		f.kubeActions = append(f.kubeActions, core.NewCreateAction(schema.GroupVersionResource{Resource: "pods"}, mpiJob.Namespace, worker))
-	}
-
-	// expect the launcher update to resume it
-	launcherCopy := launcher.DeepCopy()
-	launcherCopy.Spec.Suspend = pointer.Bool(false)
-	f.expectUpdateJobAction(launcherCopy)
-
-	// expect an update to add the conditions
-	mpiJobCopy := mpiJob.DeepCopy()
-	mpiJobCopy.Status.StartTime = &metav1.Time{Time: fakeClock.Now()}
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobSuspended, corev1.ConditionFalse, "MPIJobResumed", "MPIJob resumed")
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
-
-	f.runWithClock(getKey(mpiJob, t), fakeClock)
-}
-
-func TestWorkerNotControlledByUs(t *testing.T) {
-	f := newFixture(t, "")
-	startTime := metav1.Now()
-	completionTime := metav1.Now()
-
-	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
-
-	mpiJobCopy := mpiJob.DeepCopy()
-	scheme.Scheme.Default(mpiJobCopy)
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, nil)
-	f.setUpConfigMap(configMap)
-	f.setUpService(newWorkersService(mpiJobCopy))
-	secret, err := newSSHAuthSecret(mpiJobCopy)
-	if err != nil {
-		t.Fatalf("Creating SSH auth secret: %v", err)
-	}
-	f.setUpSecret(secret)
-	fmjc := f.newFakeMPIJobController()
-
-	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
-		worker.OwnerReferences = nil
-		f.setUpPod(worker)
-	}
-
-	f.runExpectError(getKey(mpiJob, t))
 }
 
 func TestLauncherActiveWorkerNotReady(t *testing.T) {
@@ -1041,10 +841,12 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, nil)
+	configMap := newConfigMap(mpiJobCopy)
 	f.setUpConfigMap(configMap)
-	f.setUpService(newWorkersService(mpiJobCopy))
+	tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+	tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+	f.setUpConfigMap(tjCM)
+	f.setUpService(newJobService(mpiJobCopy))
 	secret, err := newSSHAuthSecret(mpiJobCopy)
 	if err != nil {
 		t.Fatalf("Creating SSH auth secret: %v", err)
@@ -1052,14 +854,12 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 	f.setUpSecret(secret)
 
 	fmjc := f.newFakeMPIJobController()
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcherPod := mockJobPod(launcher)
-	launcherPod.Status.Phase = corev1.PodRunning
-	f.setUpLauncher(launcher)
-	f.setUpPod(launcherPod)
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
+	launcher.Status.Phase = corev1.PodRunning
+	f.setUpPod(launcher)
 
 	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
+		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
 		worker.Status.Phase = corev1.PodPending
 		f.setUpPod(worker)
 	}
@@ -1076,6 +876,7 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 			Succeeded: 0,
 			Failed:    0,
 		},
+		kubeflow.MPIReplicaTypeHorker: {},
 	}
 	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
 	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
@@ -1086,15 +887,16 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 func TestLauncherActiveWorkerReady(t *testing.T) {
 	f := newFixture(t, "")
 	startTime := metav1.Now()
-	completionTime := metav1.Now()
+	// completed job can not be running
+	// completionTime := metav1.Now()
 
 	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	mpiJob := newMPIJob("test", &replicas, &startTime, nil)
 	f.setUpMPIJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
-	f.setUpService(newWorkersService(mpiJobCopy))
+	f.setUpService(newJobService(mpiJobCopy))
 	secret, err := newSSHAuthSecret(mpiJobCopy)
 	if err != nil {
 		t.Fatalf("Creating SSH auth secret: %v", err)
@@ -1102,23 +904,21 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 	f.setUpSecret(secret)
 
 	fmjc := f.newFakeMPIJobController()
-	launcher := fmjc.newLauncherJob(mpiJobCopy)
-	launcherPod := mockJobPod(launcher)
-	launcherPod.Status.Phase = corev1.PodRunning
-	f.setUpLauncher(launcher)
-	f.setUpPod(launcherPod)
+	launcher := fmjc.newLauncherPod(mpiJobCopy)
+	launcher.Status.Phase = corev1.PodRunning
+	f.setUpPod(launcher)
 
-	var runningPodList []*corev1.Pod
 	for i := 0; i < int(replicas); i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
+		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
 		worker.Status.Phase = corev1.PodRunning
-		runningPodList = append(runningPodList, worker)
 		f.setUpPod(worker)
 	}
 
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, runningPodList)
+	configMap := newConfigMap(mpiJobCopy)
 	f.setUpConfigMap(configMap)
+	tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+	tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+	f.setUpConfigMap(tjCM)
 
 	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 		kubeflow.MPIReplicaTypeLauncher: {
@@ -1131,8 +931,9 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 			Succeeded: 0,
 			Failed:    0,
 		},
+		kubeflow.MPIReplicaTypeHorker: {},
 	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
+	setUpMPIJobTimestamp(mpiJobCopy, &startTime, nil)
 	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
 	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
 	msg = fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
@@ -1142,18 +943,20 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 	f.run(getKey(mpiJob, t))
 }
 
-func TestWorkerReady(t *testing.T) {
+func TestNoLauncher(t *testing.T) {
 	f := newFixture(t, "")
 	startTime := metav1.Now()
-	completionTime := metav1.Now()
+	// completed job can not be running
+	// completionTime := metav1.Now()
 
-	var replicas int32 = 16
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	var replicas int32 = 8
+	var horkerN int32 = 0
+	mpiJob := newHeterJob("test", false, &replicas, &horkerN, &startTime, nil)
 	f.setUpMPIJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
-	f.setUpService(newWorkersService(mpiJobCopy))
+	f.setUpService(newJobService(mpiJobCopy))
 	secret, err := newSSHAuthSecret(mpiJobCopy)
 	if err != nil {
 		t.Fatalf("Creating SSH auth secret: %v", err)
@@ -1162,20 +965,17 @@ func TestWorkerReady(t *testing.T) {
 
 	fmjc := f.newFakeMPIJobController()
 
-	var runningPodList []*corev1.Pod
-	for i := 0; i < 16; i++ {
-		worker := fmjc.newWorker(mpiJobCopy, i)
+	for i := 0; i < int(replicas); i++ {
+		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
 		worker.Status.Phase = corev1.PodRunning
-		runningPodList = append(runningPodList, worker)
 		f.setUpPod(worker)
 	}
 
-	configMap := newConfigMap(mpiJobCopy, replicas)
-	updateDiscoverHostsInConfigMap(configMap, mpiJobCopy, runningPodList)
+	configMap := newConfigMap(mpiJobCopy)
 	f.setUpConfigMap(configMap)
-
-	expLauncher := fmjc.newLauncherJob(mpiJobCopy)
-	f.expectCreateJobAction(expLauncher)
+	tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+	tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+	f.setUpConfigMap(tjCM)
 
 	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 		kubeflow.MPIReplicaTypeLauncher: {
@@ -1184,349 +984,53 @@ func TestWorkerReady(t *testing.T) {
 			Failed:    0,
 		},
 		kubeflow.MPIReplicaTypeWorker: {
-			Active:    16,
+			Active:    8,
 			Succeeded: 0,
 			Failed:    0,
 		},
+		kubeflow.MPIReplicaTypeHorker: {},
 	}
+	setUpMPIJobTimestamp(mpiJobCopy, &startTime, nil)
 	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
 	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
+	msg = fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
+	updateMPIJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
 	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
 
-func TestNewLauncherAndWorker(t *testing.T) {
-	cases := map[string]struct {
-		job          kubeflow.MPIJob
-		workerIndex  int
-		wantLauncher batchv1.Job
-		wantWorker   corev1.Pod
-	}{
-		"defaults": {
-			job: kubeflow.MPIJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-				},
-				Spec: kubeflow.MPIJobSpec{
-					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
-						kubeflow.MPIReplicaTypeLauncher: {
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{{}},
-								},
-							},
-						},
-						kubeflow.MPIReplicaTypeWorker: {
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{{}},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantLauncher: batchv1.Job{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo-launcher",
-					Namespace: "bar",
-					Labels: map[string]string{
-						"app": "foo",
-					},
-				},
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								kubeflow.OperatorNameLabel: kubeflow.OperatorName,
-								kubeflow.JobNameLabel:      "foo",
-								kubeflow.JobRoleLabel:      "launcher",
-							},
-						},
-						Spec: corev1.PodSpec{
-							Hostname:      "foo-launcher",
-							Subdomain:     "foo-worker",
-							RestartPolicy: corev1.RestartPolicyOnFailure,
-							Containers: []corev1.Container{
-								{
-									Env: joinEnvVars(
-										launcherEnvVars,
-										ompiEnvVars,
-										corev1.EnvVar{Name: openMPISlotsEnv, Value: "1"},
-										nvidiaDisableEnvVars),
-									VolumeMounts: []corev1.VolumeMount{
-										{Name: "ssh-auth", MountPath: "/root/.ssh"},
-										{Name: "mpi-job-config", MountPath: "/etc/mpi"},
-									},
-								},
-							},
-							Volumes: []corev1.Volume{
-								{
-									Name: "ssh-auth",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											DefaultMode: newInt32(0600),
-											SecretName:  "foo-ssh",
-											Items:       sshVolumeItems,
-										},
-									},
-								},
-								{
-									Name: "mpi-job-config",
-									VolumeSource: corev1.VolumeSource{
-										ConfigMap: &corev1.ConfigMapVolumeSource{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "foo-config",
-											},
-											Items: configVolumeItems,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantWorker: corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo-worker-0",
-					Namespace: "bar",
-					Labels: map[string]string{
-						kubeflow.OperatorNameLabel: kubeflow.OperatorName,
-						kubeflow.JobNameLabel:      "foo",
-						kubeflow.JobRoleLabel:      "worker",
-						kubeflow.ReplicaIndexLabel: "0",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Hostname:      "foo-worker-0",
-					Subdomain:     "foo-worker",
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Command: []string{"/usr/sbin/sshd", "-De"},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "ssh-auth", MountPath: "/root/.ssh"},
-							},
-							Env: workerEnvVars,
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "ssh-auth",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									DefaultMode: newInt32(0600),
-									SecretName:  "foo-ssh",
-									Items:       sshVolumeItems,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"overrides": {
-			job: kubeflow.MPIJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo",
-				},
-				Spec: kubeflow.MPIJobSpec{
-					SSHAuthMountPath:  "/home/mpiuser/.ssh",
-					SlotsPerWorker:    newInt32(5),
-					MPIImplementation: kubeflow.MPIImplementationIntel,
-					RunPolicy: kubeflow.RunPolicy{
-						TTLSecondsAfterFinished: newInt32(1),
-						ActiveDeadlineSeconds:   newInt64(2),
-						BackoffLimit:            newInt32(3),
-					},
-					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
-						kubeflow.MPIReplicaTypeLauncher: {
-							RestartPolicy: kubeflow.RestartPolicyOnFailure,
-							Template: corev1.PodTemplateSpec{
-								ObjectMeta: metav1.ObjectMeta{
-									Labels: map[string]string{"foo": "bar"},
-								},
-								Spec: corev1.PodSpec{
-									HostNetwork: true,
-									Containers: []corev1.Container{
-										{
-											Env: []corev1.EnvVar{
-												{Name: "FOO", Value: "bar"},
-											},
-											SecurityContext: &corev1.SecurityContext{
-												RunAsUser: newInt64(1000),
-											},
-											VolumeMounts: []corev1.VolumeMount{
-												{Name: "fool-vol", MountPath: "/mnt/foo"},
-											},
-										},
-										{},
-									},
-									Volumes: []corev1.Volume{
-										{Name: "foo-vol"},
-									},
-								},
-							},
-						},
-						kubeflow.MPIReplicaTypeWorker: {
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									HostNetwork: true,
-									Containers: []corev1.Container{
-										{
-											Command: []string{"/entrypoint.sh"},
-											Env: []corev1.EnvVar{
-												{Name: "FOO", Value: "bar"},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			workerIndex: 12,
-			wantLauncher: batchv1.Job{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar-launcher",
-					Namespace: "foo",
-					Labels: map[string]string{
-						"app": "bar",
-					},
-				},
-				Spec: batchv1.JobSpec{
-					TTLSecondsAfterFinished: newInt32(1),
-					ActiveDeadlineSeconds:   newInt64(2),
-					BackoffLimit:            newInt32(3),
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"foo":                      "bar",
-								kubeflow.OperatorNameLabel: kubeflow.OperatorName,
-								kubeflow.JobNameLabel:      "bar",
-								kubeflow.JobRoleLabel:      "launcher",
-							},
-						},
-						Spec: corev1.PodSpec{
-							HostNetwork:   true,
-							DNSPolicy:     corev1.DNSClusterFirstWithHostNet,
-							Hostname:      "bar-launcher",
-							Subdomain:     "bar-worker",
-							RestartPolicy: corev1.RestartPolicyOnFailure,
-							Containers: []corev1.Container{
-								{
-									SecurityContext: &corev1.SecurityContext{
-										RunAsUser: newInt64(1000),
-									},
-									Env: joinEnvVars(
-										corev1.EnvVar{Name: "FOO", Value: "bar"},
-										launcherEnvVars,
-										intelEnvVars,
-										corev1.EnvVar{Name: "I_MPI_PERHOST", Value: "5"},
-										nvidiaDisableEnvVars),
-									VolumeMounts: []corev1.VolumeMount{
-										{Name: "fool-vol", MountPath: "/mnt/foo"},
-										{Name: "ssh-auth", MountPath: "/home/mpiuser/.ssh"},
-										{Name: "mpi-job-config", MountPath: "/etc/mpi"},
-									},
-								},
-								{},
-							},
-							Volumes: []corev1.Volume{
-								{Name: "foo-vol"},
-								{
-									Name: "ssh-auth",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: "bar-ssh",
-											Items:      sshVolumeItems,
-										},
-									},
-								},
-								{
-									Name: "mpi-job-config",
-									VolumeSource: corev1.VolumeSource{
-										ConfigMap: &corev1.ConfigMapVolumeSource{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "bar-config",
-											},
-											Items: configVolumeItems,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantWorker: corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar-worker-12",
-					Namespace: "foo",
-					Labels: map[string]string{
-						kubeflow.OperatorNameLabel: kubeflow.OperatorName,
-						kubeflow.JobNameLabel:      "bar",
-						kubeflow.JobRoleLabel:      "worker",
-						kubeflow.ReplicaIndexLabel: "12",
-					},
-				},
-				Spec: corev1.PodSpec{
-					HostNetwork:   true,
-					DNSPolicy:     corev1.DNSClusterFirstWithHostNet,
-					Hostname:      "bar-worker-12",
-					Subdomain:     "bar-worker",
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Command: []string{"/entrypoint.sh"},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "ssh-auth", MountPath: "/home/mpiuser/.ssh"},
-							},
-							Env: joinEnvVars(corev1.EnvVar{Name: "FOO", Value: "bar"}, workerEnvVars),
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "ssh-auth",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: "bar-ssh",
-									Items:      sshVolumeItems,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+func TestWorkerNotControlledByUs(t *testing.T) {
+	f := newFixture(t, "")
+	startTime := metav1.Now()
+	completionTime := metav1.Now()
+
+	var replicas int32 = 8
+	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	f.setUpMPIJob(mpiJob)
+
+	mpiJobCopy := mpiJob.DeepCopy()
+	scheme.Scheme.Default(mpiJobCopy)
+	configMap := newConfigMap(mpiJobCopy)
+	f.setUpConfigMap(configMap)
+	tjName := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
+	tjCM := newMPIRunWrapperConfig(mpiJobCopy, tjName)
+	f.setUpConfigMap(tjCM)
+	f.setUpService(newJobService(mpiJobCopy))
+	secret, err := newSSHAuthSecret(mpiJobCopy)
+	if err != nil {
+		t.Fatalf("Creating SSH auth secret: %v", err)
 	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			job := tc.job.DeepCopy()
-			scheme.Scheme.Default(job)
-			ctrl := &MPIJobController{}
-			launcher := ctrl.newLauncherJob(job)
-			if !metav1.IsControlledBy(launcher, job) {
-				t.Errorf("Created launcher Pod is not controlled by Job")
-			}
-			if diff := cmp.Diff(&tc.wantLauncher, launcher, ignoreReferences); diff != "" {
-				t.Errorf("Unexpected launcher pod (-want,+got):\n%s", diff)
-			}
-			worker := ctrl.newWorker(job, tc.workerIndex)
-			if !metav1.IsControlledBy(worker, job) {
-				t.Errorf("Created worker Pod is not controlled by Job")
-			}
-			if diff := cmp.Diff(&tc.wantWorker, worker, ignoreReferences); diff != "" {
-				t.Errorf("Unexpected launcher pod (-want,+got):\n%s", diff)
-			}
-		})
+	f.setUpSecret(secret)
+	fmjc := f.newFakeMPIJobController()
+
+	for i := 0; i < int(replicas); i++ {
+		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
+		worker.OwnerReferences = nil
+		f.setUpPod(worker)
 	}
+
+	f.runExpectError(getKey(mpiJob, t))
 }
 
 func TestNewConfigMap(t *testing.T) {
@@ -1535,10 +1039,10 @@ func TestNewConfigMap(t *testing.T) {
 		workerReplicas int32
 		wantCM         *corev1.ConfigMap
 	}{
-		"OpenMPI without slots": {
+		"basic configmap": {
 			mpiJob: &kubeflow.MPIJob{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "openmpi-without-slots",
+					Name:      "test-cm",
 					Namespace: "tenant-a",
 				},
 				Spec: kubeflow.MPIJobSpec{
@@ -1548,71 +1052,26 @@ func TestNewConfigMap(t *testing.T) {
 			workerReplicas: 2,
 			wantCM: &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "openmpi-without-slots-config",
+					Name:      "test-cm" + configSuffix,
 					Namespace: "tenant-a",
 					Labels: map[string]string{
-						"app": "openmpi-without-slots",
+						"app": "test-cm",
 					},
 				},
 				Data: map[string]string{
-					"hostfile": "openmpi-without-slots-worker-0.openmpi-without-slots-worker.tenant-a.svc slots=1\nopenmpi-without-slots-worker-1.openmpi-without-slots-worker.tenant-a.svc slots=1\n",
-				},
-			},
-		},
-		"IntelMPI with slots": {
-			mpiJob: &kubeflow.MPIJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "intelmpi-with-slots",
-					Namespace: "project-x",
-				},
-				Spec: kubeflow.MPIJobSpec{
-					SlotsPerWorker:    pointer.Int32(10),
-					MPIImplementation: kubeflow.MPIImplementationIntel,
-				},
-			},
-			workerReplicas: 1,
-			wantCM: &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "intelmpi-with-slots-config",
-					Namespace: "project-x",
-					Labels: map[string]string{
-						"app": "intelmpi-with-slots",
-					},
-				},
-				Data: map[string]string{
-					"hostfile": "intelmpi-with-slots-worker-0.intelmpi-with-slots-worker.project-x.svc:10\n",
-				},
-			},
-		},
-		"MPICH with slots": {
-			mpiJob: &kubeflow.MPIJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "mpich-with-slots",
-					Namespace: "project-x",
-				},
-				Spec: kubeflow.MPIJobSpec{
-					SlotsPerWorker:    pointer.Int32(10),
-					MPIImplementation: kubeflow.MPIImplementationMPICH,
-				},
-			},
-			workerReplicas: 1,
-			wantCM: &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "mpich-with-slots-config",
-					Namespace: "project-x",
-					Labels: map[string]string{
-						"app": "mpich-with-slots",
-					},
-				},
-				Data: map[string]string{
-					"hostfile": "mpich-with-slots-worker-0.mpich-with-slots-worker.project-x.svc:10\n",
+					"discover_hosts.sh": discover_hosts_tmp,
+					"ssh_config":        ssh_config_tmp,
+					"sshd_config":       sshd_config_tmp,
+					"environ":           "",
+					"recover":           "",
+					"hostfile":          "test-cm-launcher.test-cm.tenant-a slots=1\n",
 				},
 			},
 		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			cm := newConfigMap(tc.mpiJob, tc.workerReplicas)
+			cm := newConfigMap(tc.mpiJob)
 			if !metav1.IsControlledBy(cm, tc.mpiJob) {
 				t.Errorf("Created configMap is not controlled by MPIJob")
 			}
@@ -1620,43 +1079,6 @@ func TestNewConfigMap(t *testing.T) {
 				t.Errorf("Unexpected configMap (-want,+got):\n%s", diff)
 			}
 		})
-	}
-}
-
-func newInt64(v int64) *int64 {
-	return &v
-}
-
-func joinEnvVars(evs ...interface{}) []corev1.EnvVar {
-	var result []corev1.EnvVar
-	for _, ev := range evs {
-		switch v := ev.(type) {
-		case corev1.EnvVar:
-			result = append(result, v)
-		case []corev1.EnvVar:
-			result = append(result, v...)
-		default:
-			panic("must by of type EnvVar or []EnvVar")
-		}
-	}
-	return result
-}
-
-func mockJobPod(job *batchv1.Job) *corev1.Pod {
-	job.Spec.Selector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"controller-uid": string(uuid.NewUUID()),
-		},
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      job.Name + "-" + rand.String(5),
-			Labels:    job.Spec.Selector.MatchLabels,
-			Namespace: job.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(job, batchv1.SchemeGroupVersion.WithKind("Job")),
-			},
-		},
 	}
 }
 
@@ -1668,4 +1090,308 @@ func (f *fixture) newFakeMPIJobController() *MPIJobController {
 		recorder:  &record.FakeRecorder{},
 		podLister: k8sI.Core().V1().Pods().Lister(),
 	}
+}
+
+func TestGetRestartCount(t *testing.T) {
+	testCases := map[string]struct {
+		pod           *corev1.Pod
+		expectedCount int32
+	}{
+		"pod with restarts": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{RestartCount: 3},
+					},
+				},
+			},
+			expectedCount: 3,
+		},
+		"pod without restarts": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{RestartCount: 0},
+					},
+				},
+			},
+			expectedCount: 0,
+		},
+		"nil pod": {
+			pod:           nil,
+			expectedCount: 0,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			count := getRestartCount(tc.pod)
+			assert.Equal(t, tc.expectedCount, count)
+		})
+	}
+}
+
+func TestGetPodDuration(t *testing.T) {
+	now := metav1.Now()
+	testCases := map[string]struct {
+		pod          *corev1.Pod
+		expectError  bool
+		expectGTZero bool
+	}{
+		"pod with start time": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					StartTime: &now,
+				},
+			},
+			expectError:  false,
+			expectGTZero: true,
+		},
+		"pod without start time": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{},
+			},
+			expectError:  true,
+			expectGTZero: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			duration, err := getPodDuration(tc.pod)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tc.expectGTZero {
+					assert.True(t, duration > 0)
+				}
+			}
+		})
+	}
+}
+
+func TestNoRestartError(t *testing.T) {
+	testCases := map[string]struct {
+		status          corev1.ContainerStatus
+		expectNoRestart bool
+	}{
+		"exit code 222": {
+			status: corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 222,
+					},
+				},
+			},
+			expectNoRestart: true,
+		},
+		"OOM killed": {
+			status: corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason: "OOMKilled",
+					},
+				},
+			},
+			expectNoRestart: true,
+		},
+		"normal termination": {
+			status: corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 1,
+					},
+				},
+			},
+			expectNoRestart: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			result := noRestartError(&tc.status)
+			assert.Equal(t, tc.expectNoRestart, result)
+		})
+	}
+}
+
+func TestBackoffLimitExceeded(t *testing.T) {
+	now := metav1.Now()
+	testCases := map[string]struct {
+		pod            *corev1.Pod
+		expectExceeded bool
+	}{
+		"exceeded restarts": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					StartTime: &now,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							RestartCount: 8,
+							State: corev1.ContainerState{
+								Terminated: &corev1.ContainerStateTerminated{},
+							},
+						},
+					},
+				},
+			},
+			expectExceeded: true,
+		},
+		"not exceeded": {
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					StartTime: &now,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							RestartCount: 1,
+							State: corev1.ContainerState{
+								Terminated: &corev1.ContainerStateTerminated{},
+							},
+						},
+					},
+				},
+			},
+			expectExceeded: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			result := backoffLimitExceeded(tc.pod)
+			assert.Equal(t, tc.expectExceeded, result)
+		})
+	}
+}
+
+func TestCountReadyPods(t *testing.T) {
+	testCases := map[string]struct {
+		pods          []*corev1.Pod
+		expectedCount int
+	}{
+		"all pods ready": {
+			pods: []*corev1.Pod{
+				{
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+				{
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+			},
+			expectedCount: 2,
+		},
+		"mixed ready state": {
+			pods: []*corev1.Pod{
+				{
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+				{
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionFalse},
+						},
+					},
+				},
+			},
+			expectedCount: 1,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			kubeClient := kubefake.NewSimpleClientset()
+			kubeflowClient := fake.NewSimpleClientset()
+			controller, _ := newMPIJobController(kubeClient, kubeflowClient, 0)
+
+			count := controller.countReadyPods(tc.pods)
+			assert.Equal(t, tc.expectedCount, count)
+		})
+	}
+}
+
+func TestIsCleanUpPods(t *testing.T) {
+	testCases := map[string]struct {
+		policy        *kubeflow.CleanPodPolicy
+		expectCleanup bool
+	}{
+		"clean all pods": {
+			policy:        CleanPodPolicyPtr(kubeflow.CleanPodPolicyAll),
+			expectCleanup: true,
+		},
+		"clean running pods": {
+			policy:        CleanPodPolicyPtr(kubeflow.CleanPodPolicyRunning),
+			expectCleanup: true,
+		},
+		"no cleanup": {
+			policy:        CleanPodPolicyPtr(kubeflow.CleanPodPolicyNone),
+			expectCleanup: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			result := isCleanUpPods(tc.policy)
+			assert.Equal(t, tc.expectCleanup, result)
+		})
+	}
+}
+
+func newMPIJobController(
+	kubeClient kubernetes.Interface,
+	kubeflowClient clientset.Interface,
+	resyncPeriod time.Duration) (*MPIJobController, informers.SharedInformerFactory) {
+
+	informerFactory := informers.NewSharedInformerFactory(kubeflowClient, resyncPeriod)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
+
+	controller := NewMPIJobControllerWithClock(
+		kubeClient,
+		kubeflowClient,
+		nil, // volcano client
+		nil, // sched client
+		kubeInformerFactory.Core().V1().Events(),
+		kubeInformerFactory.Core().V1().ConfigMaps(),
+		kubeInformerFactory.Core().V1().Secrets(),
+		kubeInformerFactory.Core().V1().Services(),
+		kubeInformerFactory.Core().V1().Pods(),
+		kubeInformerFactory.Scheduling().V1().PriorityClasses(),
+		informerFactory.Kubeflow().V2beta1().MPIJobs(),
+		&clock.RealClock{},
+		metav1.NamespaceAll,
+		"", // gang scheduling name
+		"", // custom resource prefix
+		"", // kubemaster
+		5,  // gpus per node
+	)
+
+	controller.podLister = kubeInformerFactory.Core().V1().Pods().Lister()
+	controller.podSynced = kubeInformerFactory.Core().V1().Pods().Informer().HasSynced
+	controller.configMapLister = kubeInformerFactory.Core().V1().ConfigMaps().Lister()
+	controller.configMapSynced = kubeInformerFactory.Core().V1().ConfigMaps().Informer().HasSynced
+	controller.serviceLister = kubeInformerFactory.Core().V1().Services().Lister()
+	controller.serviceSynced = kubeInformerFactory.Core().V1().Services().Informer().HasSynced
+	controller.secretLister = kubeInformerFactory.Core().V1().Secrets().Lister()
+	controller.secretSynced = kubeInformerFactory.Core().V1().Secrets().Informer().HasSynced
+	controller.mpiJobLister = informerFactory.Kubeflow().V2beta1().MPIJobs().Lister()
+	controller.mpiJobSynced = informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().HasSynced
+	controller.recorder = &record.FakeRecorder{}
+
+	return controller, informerFactory
+}
+
+// Add this helper function near the other test helper functions
+func CleanPodPolicyPtr(policy kubeflow.CleanPodPolicy) *kubeflow.CleanPodPolicy {
+	return &policy
 }

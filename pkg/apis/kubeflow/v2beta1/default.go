@@ -74,8 +74,9 @@ func SetDefaults_MPIJob(mpiJob *MPIJob) {
 	// set default to Launcher
 	setDefaultsTypeLauncher(mpiJob.Spec.MPIReplicaSpecs[MPIReplicaTypeLauncher])
 
-	// set default to Worker
+	// set default to Worker/Horker
 	setDefaultsTypeWorker(mpiJob.Spec.MPIReplicaSpecs[MPIReplicaTypeWorker])
+	setDefaultsTypeWorker(mpiJob.Spec.MPIReplicaSpecs[MPIReplicaTypeHorker])
 }
 
 func newInt32(v int32) *int32 {
