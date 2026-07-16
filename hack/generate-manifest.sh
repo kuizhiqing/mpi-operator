@@ -21,11 +21,11 @@ set -o pipefail
 cd "$(dirname "$0")/.."
 KUSTOMIZE=${1:-"bin/kustomize"}
 
-MANIFEST=deploy/v2beta1/mpi-operator.yaml
+MANIFEST=deploy/v2beta1/resilient-training-operator.yaml
 
 cat <<EOF > "${MANIFEST}"
 # --------------------------------------------------
-# - Single configuration deployment YAML for MPI-Operator
+# - Single configuration deployment YAML for Resilient Training Operator
 # - Includes:
 #      CRD
 #      Namespace

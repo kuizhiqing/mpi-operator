@@ -18,7 +18,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 )
 
 // ServerOption is the main context object for the controller manager.
@@ -53,8 +53,8 @@ func (s *ServerOption) AddFlags(fs *flag.FlagSet) {
 		"Path to a kubeConfig. Only required if out-of-cluster.")
 
 	fs.StringVar(&s.Namespace, "namespace", os.Getenv(v2beta1.EnvKubeflowNamespace),
-		`The namespace to monitor mpijobs. If unset, it monitors all namespaces cluster-wide. 
-                If set, it only monitors mpijobs in the given namespace.`)
+		`The namespace to monitor resilientjobs. If unset, it monitors all namespaces cluster-wide. 
+                If set, it only monitors resilientjobs in the given namespace.`)
 
 	fs.IntVar(&s.Threadiness, "threadiness", 2,
 		`How many threads to process the main logic`)
@@ -64,7 +64,7 @@ func (s *ServerOption) AddFlags(fs *flag.FlagSet) {
 	fs.IntVar(&s.MonitoringPort, "monitoring-port", 0,
 		`Endpoint port for displaying monitoring metrics. It can be set to "0" to disable the metrics serving.`)
 
-	fs.StringVar(&s.LockNamespace, "lock-namespace", "mpi-operator", "Set locked namespace name while enabling leader election.")
+	fs.StringVar(&s.LockNamespace, "lock-namespace", "resilient-training-operator", "Set locked namespace name while enabling leader election.")
 
 	fs.StringVar(&s.LockName, "lock-name", "heter-controller", "Set locked name to distinct two deployments.")
 
@@ -72,7 +72,7 @@ func (s *ServerOption) AddFlags(fs *flag.FlagSet) {
 	fs.IntVar(&s.Burst, "kube-api-burst", 10, "Maximum burst for throttle.")
 
 	fs.StringVar(&s.ExcludeNamespaces, "exclude-namespaces", "",
-		"The namespaces to be exclude to take place. eg. kube-system,mpi-operator")
+		"The namespaces to be exclude to take place. eg. kube-system,resilient-training-operator")
 
 	fs.StringVar(&s.IncludeNamespaces, "include-namespaces", "",
 		"The namespaces to be include to take place. Empty means all namespaces.")

@@ -1,4 +1,4 @@
-kubeflow/mpi-operator
+kuizhiqing/resilient-training-operator
 sigma/systemstat
 GoogleCloudPlatform/gcloud-golang
 apache/thrift

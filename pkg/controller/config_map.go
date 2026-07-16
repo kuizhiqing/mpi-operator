@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,7 +22,7 @@ var MPIRunWrapperScript string
 //go:embed mpirun-recover.sh
 var MPIRunRecoverScript string
 
-func (c *MPIJobController) setupMPIRunWrapperOnPod(podSpec *corev1.PodSpec, job *kubeflow.MPIJob) {
+func (c *ResilientJobController) setupMPIRunWrapperOnPod(podSpec *corev1.PodSpec, job *kubeflow.ResilientJob) {
 	mainContainer := &podSpec.Containers[0]
 	podSpec.Volumes = append(podSpec.Volumes,
 		corev1.Volume{
@@ -45,7 +45,7 @@ func (c *MPIJobController) setupMPIRunWrapperOnPod(podSpec *corev1.PodSpec, job 
 		})
 }
 
-func (c *MPIJobController) getOrCreateMPIRunWrapperConfigMap(mpiJob *kubeflow.MPIJob) (*corev1.ConfigMap, error) {
+func (c *ResilientJobController) getOrCreateMPIRunWrapperConfigMap(mpiJob *kubeflow.ResilientJob) (*corev1.ConfigMap, error) {
 	name := fmt.Sprintf("%s-%s", mpiJob.Name, mpirunWrapper)
 
 	newCM := newMPIRunWrapperConfig(mpiJob, name)
@@ -59,7 +59,7 @@ func (c *MPIJobController) getOrCreateMPIRunWrapperConfigMap(mpiJob *kubeflow.MP
 		return nil, err
 	}
 
-	// If the ConfigMap is not controlled by this MPIJob resource, we
+	// If the ConfigMap is not controlled by this ResilientJob resource, we
 	// should log a warning to the event recorder and return.
 	if !metav1.IsControlledBy(cm, mpiJob) {
 		msg := fmt.Sprintf(MessageResourceExists, cm.Name, cm.Kind)
@@ -70,7 +70,7 @@ func (c *MPIJobController) getOrCreateMPIRunWrapperConfigMap(mpiJob *kubeflow.MP
 	return cm, nil
 }
 
-func newMPIRunWrapperConfig(mpiJob *kubeflow.MPIJob, name string) *corev1.ConfigMap {
+func newMPIRunWrapperConfig(mpiJob *kubeflow.ResilientJob, name string) *corev1.ConfigMap {
 	script := MPIRunWrapperScript
 	if _, ok := mpiJob.Annotations[enableRecover]; ok {
 		script = MPIRunRecoverScript
@@ -92,9 +92,9 @@ func newMPIRunWrapperConfig(mpiJob *kubeflow.MPIJob, name string) *corev1.Config
 	}
 }
 
-// getOrCreateConfigMap gets the ConfigMap controlled by this MPIJob, or creates
+// getOrCreateConfigMap gets the ConfigMap controlled by this ResilientJob, or creates
 // one if it doesn't exist.
-func (c *MPIJobController) getOrCreateConfigMap(mpiJob *kubeflow.MPIJob) (*corev1.ConfigMap, error) {
+func (c *ResilientJobController) getOrCreateConfigMap(mpiJob *kubeflow.ResilientJob) (*corev1.ConfigMap, error) {
 	newCM := newConfigMap(mpiJob)
 	workers, err := c.getRunningWorkerPods(mpiJob)
 	if err != nil {
@@ -129,7 +129,7 @@ func (c *MPIJobController) getOrCreateConfigMap(mpiJob *kubeflow.MPIJob) (*corev
 		return nil, err
 	}
 
-	// If the ConfigMap is not controlled by this MPIJob resource, we
+	// If the ConfigMap is not controlled by this ResilientJob resource, we
 	// should log a warning to the event recorder and return.
 	if !metav1.IsControlledBy(cm, mpiJob) {
 		msg := fmt.Sprintf(MessageResourceExists, cm.Name, cm.Kind)
@@ -156,10 +156,10 @@ func (c *MPIJobController) getOrCreateConfigMap(mpiJob *kubeflow.MPIJob) (*corev
 	return cm, nil
 }
 
-// newConfigMap creates a new ConfigMap containing configurations for an MPIJob
+// newConfigMap creates a new ConfigMap containing configurations for an ResilientJob
 // resource. It also sets the appropriate OwnerReferences on the resource so
-// handleObject can discover the MPIJob resource that 'owns' it.
-func newConfigMap(mpiJob *kubeflow.MPIJob) *corev1.ConfigMap {
+// handleObject can discover the ResilientJob resource that 'owns' it.
+func newConfigMap(mpiJob *kubeflow.ResilientJob) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mpiJob.Name + configSuffix,
@@ -182,7 +182,7 @@ func newConfigMap(mpiJob *kubeflow.MPIJob) *corev1.ConfigMap {
 	}
 }
 
-func (c *MPIJobController) updatePodAnnotation4CM(mpiJob *kubeflow.MPIJob, cm *corev1.ConfigMap) error {
+func (c *ResilientJobController) updatePodAnnotation4CM(mpiJob *kubeflow.ResilientJob, cm *corev1.ConfigMap) error {
 	launcher, err := c.getLauncherPod(mpiJob)
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func isPodContainerRunning(pod *corev1.Pod) bool {
 	return true
 }
 
-func allContainerRunning(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) bool {
+func allContainerRunning(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) bool {
 	if hasLauncher(mpiJob) {
 		if launcher == nil || !isPodContainerRunning(launcher) {
 			return false
@@ -233,7 +233,7 @@ func allContainerRunning(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers 
 	return true
 }
 
-func updateServiceWithIP(configMap *corev1.ConfigMap, mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) {
+func updateServiceWithIP(configMap *corev1.ConfigMap, mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) {
 	klog.Infof("Job %s/%s worker %d/%d horker %d/%d", mpiJob.Namespace, mpiJob.Name, len(workers), workerReplicas(mpiJob), len(horkers), horkerReplicas(mpiJob))
 	if int(workerReplicas(mpiJob)) != len(workers) {
 		return
@@ -360,7 +360,7 @@ func updateServiceWithIP(configMap *corev1.ConfigMap, mpiJob *kubeflow.MPIJob, l
 	configMap.Data[envConfig] = env.String()
 }
 
-func getIPList(mpiJob *kubeflow.MPIJob, slots int) string {
+func getIPList(mpiJob *kubeflow.ResilientJob, slots int) string {
 	var ips bytes.Buffer
 	ipList := getAnnotation(mpiJob, heterIPListKey)
 	if ipList != "" {
@@ -372,7 +372,7 @@ func getIPList(mpiJob *kubeflow.MPIJob, slots int) string {
 	return ""
 }
 
-func getHostList(mpiJob *kubeflow.MPIJob, slots int) string {
+func getHostList(mpiJob *kubeflow.ResilientJob, slots int) string {
 	var hostfile bytes.Buffer
 	ipList := getAnnotation(mpiJob, heterIPListKey)
 	if ipList != "" {
@@ -397,7 +397,7 @@ func getDiscoverHosts() string {
 	return buffer.String()
 }
 
-func getHostfile(mpiJob *kubeflow.MPIJob) string {
+func getHostfile(mpiJob *kubeflow.ResilientJob) string {
 	if workerReplicas(mpiJob)+horkerReplicas(mpiJob) >= largeScaleThold {
 		return ""
 	}
@@ -438,21 +438,21 @@ func getHostfile(mpiJob *kubeflow.MPIJob) string {
 }
 
 // getConfigSSHPort set ssh port by env MPI_PORT
-func getConfigSSHPort(mpiJob *kubeflow.MPIJob) string {
+func getConfigSSHPort(mpiJob *kubeflow.ResilientJob) string {
 	if ok, v := getJobEnv(mpiJob, "MPI_PORT"); ok {
 		return v
 	}
 	return "36000"
 }
 
-func disablePasswordLogin(mpiJob *kubeflow.MPIJob) bool {
+func disablePasswordLogin(mpiJob *kubeflow.ResilientJob) bool {
 	if ok, v := getJobEnv(mpiJob, "PASSWORD"); !ok || v == "" {
 		return true
 	}
 	return false
 }
 
-func getSSHDConfig(mpiJob *kubeflow.MPIJob) string {
+func getSSHDConfig(mpiJob *kubeflow.ResilientJob) string {
 	var sshdBuffer bytes.Buffer
 	sshdBuffer.WriteString("StrictModes no\n")
 	sshdBuffer.WriteString(fmt.Sprintf("HostKey %s\n", filepath.Join(sshConfigPath, sshPrivateHostRsaKey)))
@@ -473,7 +473,7 @@ func getSSHDConfig(mpiJob *kubeflow.MPIJob) string {
 	return sshdBuffer.String()
 }
 
-func getSSHConfig(mpiJob *kubeflow.MPIJob) string {
+func getSSHConfig(mpiJob *kubeflow.ResilientJob) string {
 	portConf := fmt.Sprintf("    Port %s\n", getConfigSSHPort(mpiJob))
 
 	var sshBuffer bytes.Buffer
@@ -487,7 +487,7 @@ func getSSHConfig(mpiJob *kubeflow.MPIJob) string {
 }
 
 // getNodeList return hostname list
-func getNodeList(mpiJob *kubeflow.MPIJob) string {
+func getNodeList(mpiJob *kubeflow.ResilientJob) string {
 	if workerReplicas(mpiJob)+horkerReplicas(mpiJob) >= largeScaleThold {
 		return ""
 	}
@@ -512,7 +512,7 @@ func getNodeList(mpiJob *kubeflow.MPIJob) string {
 	return strings.TrimSuffix(buffer.String(), ",")
 }
 
-func updateRecoverStateFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.MPIJob) error {
+func updateRecoverStateFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.ResilientJob) error {
 	recoverState := getAnnotation(mpiJob, enableRecover)
 	configMap.Data[recoverFileName] = recoverState
 	return nil

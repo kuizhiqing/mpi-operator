@@ -1,6 +1,6 @@
 # Horovod CPU-Only Case
 
-This example shows how to run a cpu-only mpijob.
+This example shows how to run a cpu-only resilientjob.
 
 ## How to Build Image
 
@@ -12,7 +12,7 @@ docker build -t horovod:latest .
 
 ## Create Mpijob
 
-The example mpijob is to run the horovod cpu-only example [tensorflow_mnist.py](https://raw.githubusercontent.com/horovod/horovod/master/examples/v2beta1/horovod/tensorflow_mnist.py).
+The example resilientjob is to run the horovod cpu-only example [tensorflow_mnist.py](https://raw.githubusercontent.com/horovod/horovod/master/examples/v2beta1/horovod/tensorflow_mnist.py).
 
 ```bash
 kubectl create -f ./tensorflow-mnist.yaml

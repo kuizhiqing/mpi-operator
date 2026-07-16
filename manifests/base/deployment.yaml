@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mpi-operator
+  name: resilient-training-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mpi-operator
+      app: resilient-training-operator
   template:
     metadata:
       labels:
-        app: mpi-operator
+        app: resilient-training-operator
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
       containers:
       - args:
         - -alsologtostderr
-        image: mpioperator/mpi-operator:latest
-        name: mpi-operator
-      serviceAccountName: mpi-operator
+        image: kuizhiqing/resilient-training-operator:latest
+        name: resilient-training-operator
+      serviceAccountName: resilient-training-operator

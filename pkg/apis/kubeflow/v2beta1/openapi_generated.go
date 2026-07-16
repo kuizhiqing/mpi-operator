@@ -28,15 +28,15 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobCondition":     schema_pkg_apis_kubeflow_v2beta1_JobCondition(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobStatus":        schema_pkg_apis_kubeflow_v2beta1_JobStatus(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJob":           schema_pkg_apis_kubeflow_v2beta1_MPIJob(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJobList":       schema_pkg_apis_kubeflow_v2beta1_MPIJobList(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJobSpec":       schema_pkg_apis_kubeflow_v2beta1_MPIJobSpec(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec":      schema_pkg_apis_kubeflow_v2beta1_ReplicaSpec(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus":    schema_pkg_apis_kubeflow_v2beta1_ReplicaStatus(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.RunPolicy":        schema_pkg_apis_kubeflow_v2beta1_RunPolicy(ref),
-		"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy": schema_pkg_apis_kubeflow_v2beta1_SchedulingPolicy(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobCondition":     schema_pkg_apis_kubeflow_v2beta1_JobCondition(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobStatus":        schema_pkg_apis_kubeflow_v2beta1_JobStatus(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJob":           schema_pkg_apis_kubeflow_v2beta1_ResilientJob(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJobList":       schema_pkg_apis_kubeflow_v2beta1_ResilientJobList(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJobSpec":       schema_pkg_apis_kubeflow_v2beta1_ResilientJobSpec(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec":      schema_pkg_apis_kubeflow_v2beta1_ReplicaSpec(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus":    schema_pkg_apis_kubeflow_v2beta1_ReplicaStatus(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.RunPolicy":        schema_pkg_apis_kubeflow_v2beta1_RunPolicy(ref),
+		"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy": schema_pkg_apis_kubeflow_v2beta1_SchedulingPolicy(ref),
 	}
 }
 
@@ -123,7 +123,7 @@ func schema_pkg_apis_kubeflow_v2beta1_JobStatus(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobCondition"),
+										Ref:     ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobCondition"),
 									},
 								},
 							},
@@ -137,7 +137,7 @@ func schema_pkg_apis_kubeflow_v2beta1_JobStatus(ref common.ReferenceCallback) co
 								Allows: true,
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus"),
+										Ref: ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus"),
 									},
 								},
 							},
@@ -165,11 +165,11 @@ func schema_pkg_apis_kubeflow_v2beta1_JobStatus(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobCondition", "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobCondition", "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
-func schema_pkg_apis_kubeflow_v2beta1_MPIJob(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_kubeflow_v2beta1_ResilientJob(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -198,24 +198,24 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJob(ref common.ReferenceCallback) commo
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJobSpec"),
+							Ref:     ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJobSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobStatus"),
+							Ref:     ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.JobStatus", "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJobSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.JobStatus", "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJobSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_pkg_apis_kubeflow_v2beta1_MPIJobList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_kubeflow_v2beta1_ResilientJobList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -248,7 +248,7 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJobList(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJob"),
+										Ref:     ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJob"),
 									},
 								},
 							},
@@ -259,11 +259,11 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJobList(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.MPIJob", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ResilientJob", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_pkg_apis_kubeflow_v2beta1_MPIJobSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_kubeflow_v2beta1_ResilientJobSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -280,7 +280,7 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJobSpec(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "RunPolicy encapsulates various runtime policies of the job.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.RunPolicy"),
+							Ref:         ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.RunPolicy"),
 						},
 					},
 					"mpiReplicaSpecs": {
@@ -291,7 +291,7 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJobSpec(ref common.ReferenceCallback) c
 								Allows: true,
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec"),
+										Ref: ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec"),
 									},
 								},
 							},
@@ -323,7 +323,7 @@ func schema_pkg_apis_kubeflow_v2beta1_MPIJobSpec(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec", "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.RunPolicy"},
+			"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.ReplicaSpec", "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.RunPolicy"},
 	}
 }
 
@@ -450,12 +450,12 @@ func schema_pkg_apis_kubeflow_v2beta1_RunPolicy(ref common.ReferenceCallback) co
 					"schedulingPolicy": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SchedulingPolicy defines the policy related to scheduling, e.g. gang-scheduling",
-							Ref:         ref("github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy"),
+							Ref:         ref("github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy"),
 						},
 					},
 					"suspend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "suspend specifies whether the MPIJob controller should create Pods or not. If a MPIJob is created with suspend set to true, no Pods are created by the MPIJob controller. If a MPIJob is suspended after creation (i.e. the flag goes from false to true), the MPIJob controller will delete all active Pods and PodGroups associated with this MPIJob. Also, it will suspend the Launcher Job. Users must design their workload to gracefully handle this. Suspending a Job will reset the StartTime field of the MPIJob.\n\nDefaults to false.",
+							Description: "suspend specifies whether the ResilientJob controller should create Pods or not. If a ResilientJob is created with suspend set to true, no Pods are created by the ResilientJob controller. If a ResilientJob is suspended after creation (i.e. the flag goes from false to true), the ResilientJob controller will delete all active Pods and PodGroups associated with this ResilientJob. Also, it will suspend the Launcher Job. Users must design their workload to gracefully handle this. Suspending a Job will reset the StartTime field of the ResilientJob.\n\nDefaults to false.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -464,7 +464,7 @@ func schema_pkg_apis_kubeflow_v2beta1_RunPolicy(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy"},
+			"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1.SchedulingPolicy"},
 	}
 }
 

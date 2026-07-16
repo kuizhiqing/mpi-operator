@@ -41,11 +41,11 @@ import (
 	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanofake "volcano.sh/apis/pkg/client/clientset/versioned/fake"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
-	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/fake"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
+	clientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/fake"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/scheme"
+	informers "github.com/kuizhiqing/resilient-training-operator/pkg/client/informers/externalversions"
 )
 
 const (
@@ -95,7 +95,7 @@ type fixture struct {
 	jobLister             []*batchv1.Job
 	podLister             []*corev1.Pod
 	priorityClassLister   []*schedulingv1.PriorityClass
-	mpiJobLister          []*kubeflow.MPIJob
+	mpiJobLister          []*kubeflow.ResilientJob
 
 	// Actions expected to happen on the client.
 	kubeActions []core.Action
@@ -117,15 +117,15 @@ func newFixture(t *testing.T, gangSchedulingName string) *fixture {
 	return f
 }
 
-func newMPIJobCommon(name string, startTime, completionTime *metav1.Time) *kubeflow.MPIJob {
+func newResilientJobCommon(name string, startTime, completionTime *metav1.Time) *kubeflow.ResilientJob {
 	cleanPodPolicyAll := kubeflow.CleanPodPolicyAll
-	mpiJob := &kubeflow.MPIJob{
+	mpiJob := &kubeflow.ResilientJob{
 		TypeMeta: metav1.TypeMeta{APIVersion: kubeflow.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
-		Spec: kubeflow.MPIJobSpec{
+		Spec: kubeflow.ResilientJobSpec{
 			RunPolicy: kubeflow.RunPolicy{
 				CleanPodPolicy: &cleanPodPolicyAll,
 			},
@@ -158,8 +158,8 @@ func newMPIJobCommon(name string, startTime, completionTime *metav1.Time) *kubef
 	return mpiJob
 }
 
-func newMPIJob(name string, replicas *int32, startTime, completionTime *metav1.Time) *kubeflow.MPIJob {
-	mpiJob := newMPIJobCommon(name, startTime, completionTime)
+func newResilientJob(name string, replicas *int32, startTime, completionTime *metav1.Time) *kubeflow.ResilientJob {
+	mpiJob := newResilientJobCommon(name, startTime, completionTime)
 	if *replicas > 0 {
 		mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker] =
 			&kubeflow.ReplicaSpec{
@@ -179,15 +179,15 @@ func newMPIJob(name string, replicas *int32, startTime, completionTime *metav1.T
 	return mpiJob
 }
 
-func newHeterJob(name string, hasLauncher bool, workerN *int32, horkerN *int32, startTime, completionTime *metav1.Time) *kubeflow.MPIJob {
+func newHeterJob(name string, hasLauncher bool, workerN *int32, horkerN *int32, startTime, completionTime *metav1.Time) *kubeflow.ResilientJob {
 	cleanPodPolicyAll := kubeflow.CleanPodPolicyAll
-	mpiJob := &kubeflow.MPIJob{
+	mpiJob := &kubeflow.ResilientJob{
 		TypeMeta: metav1.TypeMeta{APIVersion: kubeflow.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
-		Spec: kubeflow.MPIJobSpec{
+		Spec: kubeflow.ResilientJobSpec{
 			RunPolicy: kubeflow.RunPolicy{
 				CleanPodPolicy: &cleanPodPolicyAll,
 			},
@@ -252,13 +252,13 @@ func newHeterJob(name string, hasLauncher bool, workerN *int32, horkerN *int32, 
 	return mpiJob
 }
 
-func (f *fixture) newController(clock clock.WithTicker) (*MPIJobController, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory) {
+func (f *fixture) newController(clock clock.WithTicker) (*ResilientJobController, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory) {
 	f.client = fake.NewSimpleClientset(f.objects...)
 	f.kubeClient = k8sfake.NewSimpleClientset(f.kubeObjects...)
 	i := informers.NewSharedInformerFactory(f.client, noResyncPeriodFunc())
 	k8sI := kubeinformers.NewSharedInformerFactory(f.kubeClient, noResyncPeriodFunc())
 
-	c := NewMPIJobControllerWithClock(
+	c := NewResilientJobControllerWithClock(
 		f.kubeClient,
 		f.client,
 		f.volcanoClient,
@@ -269,7 +269,7 @@ func (f *fixture) newController(clock clock.WithTicker) (*MPIJobController, info
 		k8sI.Core().V1().Services(),
 		k8sI.Core().V1().Pods(),
 		k8sI.Scheduling().V1().PriorityClasses(),
-		i.Kubeflow().V2beta1().MPIJobs(),
+		i.Kubeflow().V2beta1().ResilientJobs(),
 		clock,
 		metav1.NamespaceAll,
 		f.gangSchedulingName,
@@ -344,9 +344,9 @@ func (f *fixture) newController(clock clock.WithTicker) (*MPIJobController, info
 	}
 
 	for _, mpiJob := range f.mpiJobLister {
-		err := i.Kubeflow().V2beta1().MPIJobs().Informer().GetIndexer().Add(mpiJob)
+		err := i.Kubeflow().V2beta1().ResilientJobs().Informer().GetIndexer().Add(mpiJob)
 		if err != nil {
-			fmt.Println("Failed to create mpijob")
+			fmt.Println("Failed to create resilientjob")
 		}
 	}
 
@@ -497,13 +497,13 @@ func (f *fixture) expectCreateSecretAction(d *corev1.Secret) {
 	f.kubeActions = append(f.kubeActions, core.NewCreateAction(schema.GroupVersionResource{Resource: "secrets"}, d.Namespace, d))
 }
 
-func (f *fixture) expectUpdateMPIJobStatusAction(mpiJob *kubeflow.MPIJob) {
-	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "mpijobs"}, mpiJob.Namespace, mpiJob)
+func (f *fixture) expectUpdateResilientJobStatusAction(mpiJob *kubeflow.ResilientJob) {
+	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "resilientjobs"}, mpiJob.Namespace, mpiJob)
 	action.Subresource = "status"
 	f.actions = append(f.actions, action)
 }
 
-func (f *fixture) setUpMPIJob(mpiJob *kubeflow.MPIJob) {
+func (f *fixture) setUpResilientJob(mpiJob *kubeflow.ResilientJob) {
 	f.mpiJobLister = append(f.mpiJobLister, mpiJob)
 	f.objects = append(f.objects, mpiJob)
 }
@@ -533,7 +533,7 @@ func (f *fixture) setUpPriorityClass(priorityClass *schedulingv1.PriorityClass) 
 	f.kubeObjects = append(f.kubeObjects, priorityClass)
 }
 
-func setUpMPIJobTimestamp(mpiJob *kubeflow.MPIJob, startTime, completionTime *metav1.Time) {
+func setUpResilientJobTimestamp(mpiJob *kubeflow.ResilientJob, startTime, completionTime *metav1.Time) {
 	if startTime != nil {
 		mpiJob.Status.StartTime = startTime
 	}
@@ -543,7 +543,7 @@ func setUpMPIJobTimestamp(mpiJob *kubeflow.MPIJob, startTime, completionTime *me
 	}
 }
 
-func getKey(mpiJob *kubeflow.MPIJob, t *testing.T) string {
+func getKey(mpiJob *kubeflow.ResilientJob, t *testing.T) string {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(mpiJob)
 	if err != nil {
 		t.Errorf("Unexpected error getting key for mpi job %v: %v", mpiJob.Name, err)
@@ -557,24 +557,24 @@ func TestDoNothingWithInvalidKey(t *testing.T) {
 	f.run("foo/bar/baz")
 }
 
-func TestDoNothingWithNonexistentMPIJob(t *testing.T) {
+func TestDoNothingWithNonexistentResilientJob(t *testing.T) {
 	f := newFixture(t, "")
 	startTime := metav1.Now()
 	completionTime := metav1.Now()
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
+	mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
 	f.run(getKey(mpiJob, t))
 }
 
-func TestDoNothingWithInvalidMPIJob(t *testing.T) {
+func TestDoNothingWithInvalidResilientJob(t *testing.T) {
 	f := newFixture(t, "")
-	// An empty MPIJob doesn't pass validation.
-	mpiJob := &kubeflow.MPIJob{
+	// An empty ResilientJob doesn't pass validation.
+	mpiJob := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "bar",
 		},
 	}
-	f.setUpMPIJob(mpiJob)
+	f.setUpResilientJob(mpiJob)
 	f.run(getKey(mpiJob, t))
 }
 
@@ -583,10 +583,10 @@ func TestLauncherNotControlledByUs(t *testing.T) {
 	startTime := metav1.Now()
 	completionTime := metav1.Now()
 
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
@@ -602,8 +602,8 @@ func TestConfigMapNotControlledByUs(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 64
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 	f.setUpService(newJobService(mpiJob))
 
 	configMap := newConfigMap(mpiJob)
@@ -619,8 +619,8 @@ func TestWorkerServiceNotControlledByUs(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 2
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -637,9 +637,9 @@ func TestLauncherServiceNotControlledByUs(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 2
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
 	mpiJob.Spec.MPIImplementation = kubeflow.MPIImplementationIntel
-	f.setUpMPIJob(mpiJob)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -656,7 +656,7 @@ func TestLauncherServiceNotControlledByUs(t *testing.T) {
 	f.setUpSecret(secret)
 	f.setUpConfigMap(configMap)
 	f.setUpConfigMap(tjCM)
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	for i := 0; i < int(replicas); i++ {
 		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
 		f.setUpPod(worker)
@@ -671,8 +671,8 @@ func TestSecretNotControlledByUs(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 64
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -695,10 +695,10 @@ func TestPriorityCheck(t *testing.T) {
 	startTime := metav1.Now()
 	completionTime := metav1.Now()
 
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
@@ -714,11 +714,11 @@ func TestAllResourcesCreated(t *testing.T) {
 		t.Run(string(implementation), func(t *testing.T) {
 			f := newFixture(t, "")
 			now := metav1.Now()
-			mpiJob := newMPIJob("foo", newInt32(5), &now, nil)
+			mpiJob := newResilientJob("foo", newInt32(5), &now, nil)
 			mpiJob.Spec.MPIImplementation = implementation
-			f.setUpMPIJob(mpiJob)
+			f.setUpResilientJob(mpiJob)
 
-			fmjc := f.newFakeMPIJobController()
+			fmjc := f.newFakeResilientJobController()
 			mpiJobCopy := mpiJob.DeepCopy()
 			scheme.Scheme.Default(mpiJobCopy)
 			f.expectCreateServiceAction(newJobService(mpiJobCopy))
@@ -737,13 +737,13 @@ func TestAllResourcesCreated(t *testing.T) {
 			}
 			f.expectCreatePodAction(fmjc.newLauncherPod(mpiJobCopy))
 
-			mpiJobCopy.Status.Conditions = []kubeflow.JobCondition{newCondition(kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, "MPIJob default/foo is created.")}
+			mpiJobCopy.Status.Conditions = []kubeflow.JobCondition{newCondition(kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, "ResilientJob default/foo is created.")}
 			mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 				kubeflow.MPIReplicaTypeLauncher: {},
 				kubeflow.MPIReplicaTypeWorker:   {},
 				kubeflow.MPIReplicaTypeHorker:   {},
 			}
-			f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+			f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 			f.run(getKey(mpiJob, t))
 		})
@@ -756,10 +756,10 @@ func TestLauncherSucceeded(t *testing.T) {
 	startTime := metav1.Now()
 	completionTime := metav1.Now()
 
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
@@ -776,13 +776,13 @@ func TestLauncherSucceeded(t *testing.T) {
 		kubeflow.MPIReplicaTypeHorker: {},
 	}
 
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
+	setUpResilientJobTimestamp(mpiJobCopy, &startTime, &completionTime)
 
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	msg = fmt.Sprintf("MPIJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+	msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+	msg = fmt.Sprintf("ResilientJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
+	f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
@@ -792,10 +792,10 @@ func TestLauncherFailed(t *testing.T) {
 	startTime := metav1.Now()
 	completionTime := metav1.Now()
 
-	mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
@@ -815,17 +815,17 @@ func TestLauncherFailed(t *testing.T) {
 		kubeflow.MPIReplicaTypeWorker: {},
 		kubeflow.MPIReplicaTypeHorker: {},
 	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
+	setUpResilientJobTimestamp(mpiJobCopy, &startTime, &completionTime)
 
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+	msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
 	// Reason:  "launcher-failed: FailedReason1. first message."
-	// Message: "MPIJob default/test failed: launcher-failed: FailedReason1. first message."
+	// Message: "ResilientJob default/test failed: launcher-failed: FailedReason1. first message."
 	_, reason, message := fmjc.checkJobFailedWithReason(mpiJobCopy, launcher, nil, nil)
-	msg = fmt.Sprintf("MPIJob %s/%s failed: %s", mpiJob.Namespace, mpiJob.Name, message)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobFailed, corev1.ConditionTrue, reason, msg)
+	msg = fmt.Sprintf("ResilientJob %s/%s failed: %s", mpiJob.Namespace, mpiJob.Name, message)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobFailed, corev1.ConditionTrue, reason, msg)
 
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+	f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
@@ -836,8 +836,8 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -853,7 +853,7 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 	}
 	f.setUpSecret(secret)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
 	launcher.Status.Phase = corev1.PodRunning
 	f.setUpPod(launcher)
@@ -863,8 +863,8 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 		worker.Status.Phase = corev1.PodPending
 		f.setUpPod(worker)
 	}
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+	msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
 	mpiJobCopy.Status.ReplicaStatuses = map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 		kubeflow.MPIReplicaTypeLauncher: {
 			Active:    1,
@@ -878,8 +878,8 @@ func TestLauncherActiveWorkerNotReady(t *testing.T) {
 		},
 		kubeflow.MPIReplicaTypeHorker: {},
 	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, &completionTime)
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+	setUpResilientJobTimestamp(mpiJobCopy, &startTime, &completionTime)
+	f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
@@ -891,8 +891,8 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 	// completionTime := metav1.Now()
 
 	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, nil)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, nil)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -903,7 +903,7 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 	}
 	f.setUpSecret(secret)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 	launcher := fmjc.newLauncherPod(mpiJobCopy)
 	launcher.Status.Phase = corev1.PodRunning
 	f.setUpPod(launcher)
@@ -933,12 +933,12 @@ func TestLauncherActiveWorkerReady(t *testing.T) {
 		},
 		kubeflow.MPIReplicaTypeHorker: {},
 	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, nil)
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	msg = fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+	setUpResilientJobTimestamp(mpiJobCopy, &startTime, nil)
+	msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+	msg = fmt.Sprintf("ResilientJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
+	f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
@@ -952,7 +952,7 @@ func TestNoLauncher(t *testing.T) {
 	var replicas int32 = 8
 	var horkerN int32 = 0
 	mpiJob := newHeterJob("test", false, &replicas, &horkerN, &startTime, nil)
-	f.setUpMPIJob(mpiJob)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -963,7 +963,7 @@ func TestNoLauncher(t *testing.T) {
 	}
 	f.setUpSecret(secret)
 
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 
 	for i := 0; i < int(replicas); i++ {
 		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
@@ -990,12 +990,12 @@ func TestNoLauncher(t *testing.T) {
 		},
 		kubeflow.MPIReplicaTypeHorker: {},
 	}
-	setUpMPIJobTimestamp(mpiJobCopy, &startTime, nil)
-	msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-	msg = fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
-	updateMPIJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
-	f.expectUpdateMPIJobStatusAction(mpiJobCopy)
+	setUpResilientJobTimestamp(mpiJobCopy, &startTime, nil)
+	msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+	msg = fmt.Sprintf("ResilientJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
+	updateResilientJobConditions(mpiJobCopy, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
+	f.expectUpdateResilientJobStatusAction(mpiJobCopy)
 
 	f.run(getKey(mpiJob, t))
 }
@@ -1006,8 +1006,8 @@ func TestWorkerNotControlledByUs(t *testing.T) {
 	completionTime := metav1.Now()
 
 	var replicas int32 = 8
-	mpiJob := newMPIJob("test", &replicas, &startTime, &completionTime)
-	f.setUpMPIJob(mpiJob)
+	mpiJob := newResilientJob("test", &replicas, &startTime, &completionTime)
+	f.setUpResilientJob(mpiJob)
 
 	mpiJobCopy := mpiJob.DeepCopy()
 	scheme.Scheme.Default(mpiJobCopy)
@@ -1022,7 +1022,7 @@ func TestWorkerNotControlledByUs(t *testing.T) {
 		t.Fatalf("Creating SSH auth secret: %v", err)
 	}
 	f.setUpSecret(secret)
-	fmjc := f.newFakeMPIJobController()
+	fmjc := f.newFakeResilientJobController()
 
 	for i := 0; i < int(replicas); i++ {
 		worker := fmjc.newReplicas(mpiJobCopy, i, kubeflow.MPIReplicaTypeWorker)
@@ -1035,17 +1035,17 @@ func TestWorkerNotControlledByUs(t *testing.T) {
 
 func TestNewConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob         *kubeflow.MPIJob
+		mpiJob         *kubeflow.ResilientJob
 		workerReplicas int32
 		wantCM         *corev1.ConfigMap
 	}{
 		"basic configmap": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cm",
 					Namespace: "tenant-a",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIImplementation: kubeflow.MPIImplementationOpenMPI,
 				},
 			},
@@ -1073,7 +1073,7 @@ func TestNewConfigMap(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cm := newConfigMap(tc.mpiJob)
 			if !metav1.IsControlledBy(cm, tc.mpiJob) {
-				t.Errorf("Created configMap is not controlled by MPIJob")
+				t.Errorf("Created configMap is not controlled by ResilientJob")
 			}
 			if diff := cmp.Diff(tc.wantCM, cm, ignoreReferences); len(diff) != 0 {
 				t.Errorf("Unexpected configMap (-want,+got):\n%s", diff)
@@ -1082,11 +1082,11 @@ func TestNewConfigMap(t *testing.T) {
 	}
 }
 
-func (f *fixture) newFakeMPIJobController() *MPIJobController {
+func (f *fixture) newFakeResilientJobController() *ResilientJobController {
 	kubeClient := k8sfake.NewSimpleClientset(f.kubeObjects...)
 
 	k8sI := kubeinformers.NewSharedInformerFactory(kubeClient, noResyncPeriodFunc())
-	return &MPIJobController{
+	return &ResilientJobController{
 		recorder:  &record.FakeRecorder{},
 		podLister: k8sI.Core().V1().Pods().Lister(),
 	}
@@ -1313,7 +1313,7 @@ func TestCountReadyPods(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			kubeClient := kubefake.NewSimpleClientset()
 			kubeflowClient := fake.NewSimpleClientset()
-			controller, _ := newMPIJobController(kubeClient, kubeflowClient, 0)
+			controller, _ := newResilientJobController(kubeClient, kubeflowClient, 0)
 
 			count := controller.countReadyPods(tc.pods)
 			assert.Equal(t, tc.expectedCount, count)
@@ -1348,15 +1348,15 @@ func TestIsCleanUpPods(t *testing.T) {
 	}
 }
 
-func newMPIJobController(
+func newResilientJobController(
 	kubeClient kubernetes.Interface,
 	kubeflowClient clientset.Interface,
-	resyncPeriod time.Duration) (*MPIJobController, informers.SharedInformerFactory) {
+	resyncPeriod time.Duration) (*ResilientJobController, informers.SharedInformerFactory) {
 
 	informerFactory := informers.NewSharedInformerFactory(kubeflowClient, resyncPeriod)
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
 
-	controller := NewMPIJobControllerWithClock(
+	controller := NewResilientJobControllerWithClock(
 		kubeClient,
 		kubeflowClient,
 		nil, // volcano client
@@ -1367,7 +1367,7 @@ func newMPIJobController(
 		kubeInformerFactory.Core().V1().Services(),
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Scheduling().V1().PriorityClasses(),
-		informerFactory.Kubeflow().V2beta1().MPIJobs(),
+		informerFactory.Kubeflow().V2beta1().ResilientJobs(),
 		&clock.RealClock{},
 		metav1.NamespaceAll,
 		"", // gang scheduling name
@@ -1384,8 +1384,8 @@ func newMPIJobController(
 	controller.serviceSynced = kubeInformerFactory.Core().V1().Services().Informer().HasSynced
 	controller.secretLister = kubeInformerFactory.Core().V1().Secrets().Lister()
 	controller.secretSynced = kubeInformerFactory.Core().V1().Secrets().Informer().HasSynced
-	controller.mpiJobLister = informerFactory.Kubeflow().V2beta1().MPIJobs().Lister()
-	controller.mpiJobSynced = informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().HasSynced
+	controller.mpiJobLister = informerFactory.Kubeflow().V2beta1().ResilientJobs().Lister()
+	controller.mpiJobSynced = informerFactory.Kubeflow().V2beta1().ResilientJobs().Informer().HasSynced
 	controller.recorder = &record.FakeRecorder{}
 
 	return controller, informerFactory

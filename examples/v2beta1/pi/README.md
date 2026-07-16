@@ -25,7 +25,7 @@ For MPICH:
 docker build -t mpi-pi . -f mpich.Dockerfile
 ```
 
-## Create MPIJob
+## Create ResilientJob
 
 Modify `pi.yaml` (for OpenMPI), `pi-intel.yaml` (for Intel MPI) or `pi-mpich.yaml` (for MPICH) to set up the
 image name from your own registry.

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 BIN_DIR=_output/cmd/bin
-REPO_PATH="github.com/kubeflow/mpi-operator"
+REPO_PATH="github.com/kuizhiqing/resilient-training-operator"
 REL_OSARCH="linux/amd64"
 GitSHA=$(shell git rev-parse HEAD)
 Date=$(shell date "+%Y-%m-%d %H:%M:%S")
@@ -28,7 +28,7 @@ LD_FLAGS_V2=" \
     -X '${REPO_PATH}/pkg/version.GitSHA=${GitSHA}' \
     -X '${REPO_PATH}/pkg/version.Built=${Date}'   \
     -X '${REPO_PATH}/pkg/version.Version=${RELEASE_VERSION}'"
-IMAGE_NAME?=mpioperator/mpi-operator
+IMAGE_NAME?=kuizhiqing/resilient-training-operator
 KUBEBUILDER_ASSETS_PATH := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))bin/kubebuilder/bin
 KIND_VERSION=v0.18.0
 HELM_VERSION=v3.11.2
@@ -45,16 +45,16 @@ BUILD_MODE?=all
 
 CRD_OPTIONS ?= "crd:generateEmbeddedObjectMeta=true"
 
-all: ${BIN_DIR} fmt vet tidy manifest lint test mpi-operator.v2 heter
+all: ${BIN_DIR} fmt vet tidy manifest lint test resilient-training-operator.v2 heter
 
-dev: ${BIN_DIR} fmt vet tidy mpi-operator.v2
+dev: ${BIN_DIR} fmt vet tidy resilient-training-operator.v2
 
-.PHONY: mpi-operator.v2
-mpi-operator.v2:
-	go build -ldflags ${LD_FLAGS_V2} -o ${BIN_DIR}/mpi-operator.v2 ./cmd/mpi-operator/
+.PHONY: resilient-training-operator.v2
+resilient-training-operator.v2:
+	go build -ldflags ${LD_FLAGS_V2} -o ${BIN_DIR}/resilient-training-operator.v2 ./cmd/resilient-training-operator/
 
 .PHONY: mpi
-mpi: mpi-operator.v2
+mpi: resilient-training-operator.v2
 
 .PHONY: heter
 heter:
@@ -73,7 +73,7 @@ vet:
 	go vet ./...
 
 .PHONY: build
-build: fmt vet mpi-operator.v2
+build: fmt vet resilient-training-operator.v2
 
 .PHONY: test
 test:
@@ -136,7 +136,7 @@ lint: bin/golangci-lint ## Run golangci-lint linter
 	# $(GOLANGCI_LINT) run --new-from-rev=origin/master --go 1.19
 	$(GOLANGCI_LINT) run -v --go 1.19
 
-# Generate deploy/v2beta1/mpi-operator.yaml
+# Generate deploy/v2beta1/resilient-training-operator.yaml
 manifest: kustomize crd
 	hack/generate-manifest.sh $(KUSTOMIZE)
 

@@ -14,9 +14,9 @@ from kubernetes.client import V1ResourceRequirements
 # In[2]:
 
 
-from mpijob import V1ReplicaSpec
-from mpijob import V2beta1MPIJob
-from mpijob import V2beta1MPIJobSpec
+from resilientjob import V1ReplicaSpec
+from resilientjob import V2beta1ResilientJob
+from resilientjob import V2beta1ResilientJobSpec
 
 
 # In[3]:
@@ -88,13 +88,13 @@ worker_spec = V1ReplicaSpec(
 # In[6]:
 
 
-job = V2beta1MPIJob(
-    kind="MPIJob",
+job = V2beta1ResilientJob(
+    kind="ResilientJob",
     api_version="kubeflow.org/v2beta1",
     metadata=V1ObjectMeta(
         name="tensorflow-mnist",
     ),
-    spec=V2beta1MPIJobSpec(
+    spec=V2beta1ResilientJobSpec(
         slots_per_worker=1,
         mpi_replica_specs={
             "Launcher":launcher_spec,
@@ -123,6 +123,6 @@ crd_api.create_namespaced_custom_object(
     group="kubeflow.org",
     version="v2beta1",
     namespace="default",
-    plural="mpijobs",
+    plural="resilientjobs",
     body=job
 )

@@ -1,5 +1,5 @@
 --------------------------------------------------------------------------------
-kubeflow/mpi-operator  Apache License 2.0  https://github.com/kubeflow/mpi-operator/blob/master/LICENSE
+kuizhiqing/resilient-training-operator  Apache License 2.0  https://github.com/kuizhiqing/resilient-training-operator/blob/master/LICENSE
 --------------------------------------------------------------------------------
 
                                  Apache License

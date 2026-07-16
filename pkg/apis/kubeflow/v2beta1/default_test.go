@@ -20,14 +20,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestSetDefaults_MPIJob(t *testing.T) {
+func TestSetDefaults_ResilientJob(t *testing.T) {
 	cases := map[string]struct {
-		job  MPIJob
-		want MPIJob
+		job  ResilientJob
+		want ResilientJob
 	}{
 		"base defaults": {
-			want: MPIJob{
-				Spec: MPIJobSpec{
+			want: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(1),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy: NewCleanPodPolicy(CleanPodPolicyNone),
@@ -39,8 +39,8 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 			},
 		},
 		"base defaults overridden (intel)": {
-			job: MPIJob{
-				Spec: MPIJobSpec{
+			job: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(10),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy:          NewCleanPodPolicy(CleanPodPolicyRunning),
@@ -53,8 +53,8 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 					LauncherCreationPolicy: "AtStartup",
 				},
 			},
-			want: MPIJob{
-				Spec: MPIJobSpec{
+			want: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(10),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy:          NewCleanPodPolicy(CleanPodPolicyRunning),
@@ -69,8 +69,8 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 			},
 		},
 		"base defaults overridden (mpich)": {
-			job: MPIJob{
-				Spec: MPIJobSpec{
+			job: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(10),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy:          NewCleanPodPolicy(CleanPodPolicyRunning),
@@ -83,8 +83,8 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 					LauncherCreationPolicy: "AtStartup",
 				},
 			},
-			want: MPIJob{
-				Spec: MPIJobSpec{
+			want: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(10),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy:          NewCleanPodPolicy(CleanPodPolicyRunning),
@@ -99,15 +99,15 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 			},
 		},
 		"launcher defaults": {
-			job: MPIJob{
-				Spec: MPIJobSpec{
+			job: ResilientJob{
+				Spec: ResilientJobSpec{
 					MPIReplicaSpecs: map[MPIReplicaType]*ReplicaSpec{
 						MPIReplicaTypeLauncher: {},
 					},
 				},
 			},
-			want: MPIJob{
-				Spec: MPIJobSpec{
+			want: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(1),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy: NewCleanPodPolicy(CleanPodPolicyNone),
@@ -125,15 +125,15 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 			},
 		},
 		"worker defaults": {
-			job: MPIJob{
-				Spec: MPIJobSpec{
+			job: ResilientJob{
+				Spec: ResilientJobSpec{
 					MPIReplicaSpecs: map[MPIReplicaType]*ReplicaSpec{
 						MPIReplicaTypeWorker: {},
 					},
 				},
 			},
-			want: MPIJob{
-				Spec: MPIJobSpec{
+			want: ResilientJob{
+				Spec: ResilientJobSpec{
 					SlotsPerWorker: newInt32(1),
 					RunPolicy: RunPolicy{
 						CleanPodPolicy: NewCleanPodPolicy(CleanPodPolicyNone),
@@ -154,7 +154,7 @@ func TestSetDefaults_MPIJob(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			got := tc.job.DeepCopy()
-			SetDefaults_MPIJob(got)
+			SetDefaults_ResilientJob(got)
 			if diff := cmp.Diff(tc.want, *got); diff != "" {
 				t.Errorf("Unexpected changes (-want,+got):\n%s", diff)
 			}

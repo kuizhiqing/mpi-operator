@@ -2,8 +2,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: mpi-operator
-  name: mpi-operator
+    app: resilient-training-operator
+  name: resilient-training-operator
 rules:
 - apiGroups:
   - ""
@@ -69,9 +69,9 @@ rules:
 - apiGroups:
   - kubeflow.org
   resources:
-  - mpijobs
-  - mpijobs/finalizers
-  - mpijobs/status
+  - resilientjobs
+  - resilientjobs/finalizers
+  - resilientjobs/status
   verbs:
   - "*"
 - apiGroups:
@@ -109,13 +109,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kubeflow-mpijobs-admin
+  name: kubeflow-resilientjobs-admin
   labels:
     rbac.authorization.kubeflow.org/aggregate-to-kubeflow-admin: "true"
 aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
-      rbac.authorization.kubeflow.org/aggregate-to-kubeflow-mpijobs-admin: "true"
+      rbac.authorization.kubeflow.org/aggregate-to-kubeflow-resilientjobs-admin: "true"
 rules: []
 
 ---
@@ -123,16 +123,16 @@ rules: []
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kubeflow-mpijobs-edit
+  name: kubeflow-resilientjobs-edit
   labels:
     rbac.authorization.kubeflow.org/aggregate-to-kubeflow-edit: "true"
-    rbac.authorization.kubeflow.org/aggregate-to-kubeflow-mpijobs-admin: "true"
+    rbac.authorization.kubeflow.org/aggregate-to-kubeflow-resilientjobs-admin: "true"
 rules:
 - apiGroups:
   - kubeflow.org
   resources:
-  - mpijobs
-  - mpijobs/status
+  - resilientjobs
+  - resilientjobs/status
   verbs:
   - get
   - list
@@ -148,15 +148,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kubeflow-mpijobs-view
+  name: kubeflow-resilientjobs-view
   labels:
     rbac.authorization.kubeflow.org/aggregate-to-kubeflow-view: "true"
 rules:
 - apiGroups:
   - kubeflow.org
   resources:
-  - mpijobs
-  - mpijobs/status
+  - resilientjobs
+  - resilientjobs/status
   verbs:
   - get
   - list

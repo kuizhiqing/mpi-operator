@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +20,7 @@ import (
 
 // getOrCreateSSHAuthSecret gets the Secret holding the SSH auth for this job,
 // or create one if it doesn't exist.
-func (c *MPIJobController) getOrCreateSSHAuthSecret(job *kubeflow.MPIJob) (*corev1.Secret, error) {
+func (c *ResilientJobController) getOrCreateSSHAuthSecret(job *kubeflow.ResilientJob) (*corev1.Secret, error) {
 	secret, err := c.secretLister.Secrets(job.Namespace).Get(job.Name + sshAuthSecretSuffix)
 	if errors.IsNotFound(err) {
 		secret, err := newSSHAuthSecret(job)
@@ -42,7 +42,7 @@ func (c *MPIJobController) getOrCreateSSHAuthSecret(job *kubeflow.MPIJob) (*core
 }
 
 // updateSSHAuthSecret updates the SSH auth secret only from the annotation.
-func (c *MPIJobController) updateSSHAuthSecret(job *kubeflow.MPIJob, secret *corev1.Secret) (*corev1.Secret, error) {
+func (c *ResilientJobController) updateSSHAuthSecret(job *kubeflow.ResilientJob, secret *corev1.Secret) (*corev1.Secret, error) {
 	publicKey, privatePEM, err := getSSHKeyPairFromAnnotation(job)
 	if err != nil {
 		// no ssh key pair in annotation
@@ -82,7 +82,7 @@ func genSSHKeyPairRandom() ([]byte, []byte, error) {
 	return ssh.MarshalAuthorizedKey(publicKey), privatePEM, nil
 }
 
-func getSSHKeyPairFromAnnotation(job *kubeflow.MPIJob) ([]byte, []byte, error) {
+func getSSHKeyPairFromAnnotation(job *kubeflow.ResilientJob) ([]byte, []byte, error) {
 	// get public key string from annotion
 	publicKey := getAnnotation(job, sshPublicKey)
 	privateKey := getAnnotation(job, corev1.SSHAuthPrivateKey)
@@ -102,7 +102,7 @@ func getSSHKeyPairFromAnnotation(job *kubeflow.MPIJob) ([]byte, []byte, error) {
 
 // newSSHAuthSecret creates a new Secret that holds SSH auth: a private Key
 // and its public key version.
-func newSSHAuthSecret(job *kubeflow.MPIJob) (*corev1.Secret, error) {
+func newSSHAuthSecret(job *kubeflow.ResilientJob) (*corev1.Secret, error) {
 	publicKey, privatePEM, err := getSSHKeyPairFromAnnotation(job)
 	if err != nil {
 		publicKey, privatePEM, err = genSSHKeyPairRandom()
@@ -129,7 +129,7 @@ func newSSHAuthSecret(job *kubeflow.MPIJob) (*corev1.Secret, error) {
 	}, nil
 }
 
-func (c *MPIJobController) setupSSHOnPod(podSpec *corev1.PodSpec, job *kubeflow.MPIJob) {
+func (c *ResilientJobController) setupSSHOnPod(podSpec *corev1.PodSpec, job *kubeflow.ResilientJob) {
 	mainContainer := &podSpec.Containers[0]
 
 	// /etc/mpi/hostfile environ

@@ -22,7 +22,7 @@ const (
 	// DefaultLauncherRestartPolicy is default RestartPolicy for Launcher Job.
 	DefaultLauncherRestartPolicy = RestartPolicyOnFailure
 	// OperatorName is the name of the operator used as value to the label common.OperatorLabelName
-	OperatorName = "mpi-operator"
+	OperatorName = "resilient-training-operator"
 )
 
 // merge from common.v1
@@ -35,7 +35,7 @@ const (
 	// ReplicaTypeLabel represents the label key for the replica-type, e.g. ps, worker etc.
 	ReplicaTypeLabel = "training.kubeflow.org/replica-type"
 
-	// OperatorNameLabel represents the label key for the operator name, e.g. tf-operator, mpi-operator, etc.
+	// OperatorNameLabel represents the label key for the operator name, e.g. tf-operator, resilient-training-operator, etc.
 	OperatorNameLabel = "training.kubeflow.org/operator-name"
 
 	// JobNameLabel represents the label key for the job name, the value is the job name.

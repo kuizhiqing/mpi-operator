@@ -40,12 +40,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 
-	"github.com/kubeflow/mpi-operator/cmd/heter-controller/app/options"
-	mpijobclientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
-	kubeflowscheme "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
-	controllersv1 "github.com/kubeflow/mpi-operator/pkg/controller"
-	"github.com/kubeflow/mpi-operator/pkg/version"
+	"github.com/kuizhiqing/resilient-training-operator/cmd/heter-controller/app/options"
+	resilientjobclientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
+	kubeflowscheme "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/scheme"
+	informers "github.com/kuizhiqing/resilient-training-operator/pkg/client/informers/externalversions"
+	controllersv1 "github.com/kuizhiqing/resilient-training-operator/pkg/controller"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/version"
 )
 
 const (
@@ -142,7 +142,7 @@ func Run(opt *options.ServerOption) error {
 		controller := controllersv1.NewHeterJobController(
 			kubeClient,
 			mpiJobClientSet,
-			kubeflowInformerFactory.Kubeflow().V2beta1().MPIJobs(),
+			kubeflowInformerFactory.Kubeflow().V2beta1().ResilientJobs(),
 			namespace,
 			opt.ExcludeNamespaces,
 			opt.IncludeNamespaces,
@@ -246,7 +246,7 @@ func createClientSets(
 ) (
 	kubeclientset.Interface,
 	kubeclientset.Interface,
-	mpijobclientset.Interface,
+	resilientjobclientset.Interface,
 	error,
 ) {
 
@@ -260,7 +260,7 @@ func createClientSets(
 		return nil, nil, nil, err
 	}
 
-	mpiJobClientSet, err := mpijobclientset.NewForConfig(config)
+	mpiJobClientSet, err := resilientjobclientset.NewForConfig(config)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -268,8 +268,8 @@ func createClientSets(
 	return kubeClientSet, leaderElectionClientSet, mpiJobClientSet, nil
 }
 
-func checkCRDExists(clientset mpijobclientset.Interface, namespace string) bool {
-	_, err := clientset.KubeflowV2beta1().MPIJobs(namespace).List(context.TODO(), metav1.ListOptions{})
+func checkCRDExists(clientset resilientjobclientset.Interface, namespace string) bool {
+	_, err := clientset.KubeflowV2beta1().ResilientJobs(namespace).List(context.TODO(), metav1.ListOptions{})
 
 	if err != nil {
 		klog.Error(err)

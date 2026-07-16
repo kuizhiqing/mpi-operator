@@ -4,14 +4,14 @@ resources:
 - ../../base
 namespace: kubeflow
 commonLabels:
-  kustomize.component: mpi-operator
-  app: mpi-operator
-  app.kubernetes.io/name: mpi-operator
-  app.kubernetes.io/component: mpijob
+  kustomize.component: resilient-training-operator
+  app: resilient-training-operator
+  app.kubernetes.io/name: resilient-training-operator
+  app.kubernetes.io/component: resilientjob
 patches:
   - target:
       group: apps
       version: v1
       kind: Deployment
-      name: mpi-operator
+      name: resilient-training-operator
     path: ./patch.yaml

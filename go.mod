@@ -1,4 +1,4 @@
-module github.com/kubeflow/mpi-operator
+module github.com/kuizhiqing/resilient-training-operator
 
 go 1.19
 

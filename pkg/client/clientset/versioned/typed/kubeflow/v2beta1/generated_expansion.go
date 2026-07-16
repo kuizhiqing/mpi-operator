@@ -16,4 +16,4 @@
 
 package v2beta1
 
-type MPIJobExpansion interface{}
+type ResilientJobExpansion interface{}

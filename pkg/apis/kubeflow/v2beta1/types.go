@@ -24,20 +24,20 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-type MPIJob struct {
+type ResilientJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              MPIJobSpec `json:"spec,omitempty"`
+	Spec              ResilientJobSpec `json:"spec,omitempty"`
 	Status            JobStatus  `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 
-type MPIJobList struct {
+type ResilientJobList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
-	Items           []MPIJob `json:"items"`
+	Items           []ResilientJob `json:"items"`
 }
 
 // CleanPodPolicy describes how to deal with pods when the job is finished.
@@ -120,13 +120,13 @@ type RunPolicy struct {
 	// +optional
 	SchedulingPolicy *SchedulingPolicy `json:"schedulingPolicy,omitempty"`
 
-	// suspend specifies whether the MPIJob controller should create Pods or not.
-	// If a MPIJob is created with suspend set to true, no Pods are created by
-	// the MPIJob controller. If a MPIJob is suspended after creation (i.e. the
-	// flag goes from false to true), the MPIJob controller will delete all
-	// active Pods and PodGroups associated with this MPIJob. Also, it will suspend the
+	// suspend specifies whether the ResilientJob controller should create Pods or not.
+	// If a ResilientJob is created with suspend set to true, no Pods are created by
+	// the ResilientJob controller. If a ResilientJob is suspended after creation (i.e. the
+	// flag goes from false to true), the ResilientJob controller will delete all
+	// active Pods and PodGroups associated with this ResilientJob. Also, it will suspend the
 	// Launcher Job. Users must design their workload to gracefully handle this.
-	// Suspending a Job will reset the StartTime field of the MPIJob.
+	// Suspending a Job will reset the StartTime field of the ResilientJob.
 	//
 	// Defaults to false.
 	// +kubebuilder:default:=false
@@ -146,7 +146,7 @@ const (
 	LauncherCreationPolicyWaitForWorkersReady LauncherCreationPolicy = "WaitForWorkersReady"
 )
 
-type MPIJobSpec struct {
+type ResilientJobSpec struct {
 
 	// Specifies the number of slots per worker used in hostfile.
 	// Defaults to 1.

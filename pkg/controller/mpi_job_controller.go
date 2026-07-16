@@ -48,13 +48,13 @@ import (
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
-	"github.com/kubeflow/mpi-operator/cmd/mpi-operator/app/options"
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
-	"github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/validation"
-	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions/kubeflow/v2beta1"
-	listers "github.com/kubeflow/mpi-operator/pkg/client/listers/kubeflow/v2beta1"
+	"github.com/kuizhiqing/resilient-training-operator/cmd/resilient-training-operator/app/options"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/validation"
+	clientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/scheme"
+	informers "github.com/kuizhiqing/resilient-training-operator/pkg/client/informers/externalversions/kubeflow/v2beta1"
+	listers "github.com/kuizhiqing/resilient-training-operator/pkg/client/listers/kubeflow/v2beta1"
 )
 
 const (
@@ -81,7 +81,7 @@ const (
 	worker                  = "worker"
 	horker                  = "horker"
 	labelGroupName          = "group-name"
-	labelMPIJobName         = "mpi-job-name"
+	labelResilientJobName         = "mpi-job-name"
 	labelMPIRoleType        = "mpi-job-role"
 	sshPublicKey            = "ssh-publickey"
 	sshPrivateKeyFile       = "id_rsa"
@@ -101,17 +101,17 @@ const (
 )
 
 const (
-	// ErrResourceExists is used as part of the Event 'reason' when an MPIJob
+	// ErrResourceExists is used as part of the Event 'reason' when an ResilientJob
 	// fails to sync due to dependent resources of the same name already
 	// existing.
 	ErrResourceExists = "ErrResourceExists"
 
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to dependent resources already existing.
-	MessageResourceExists = "Resource %q of Kind %q already exists and is not managed by MPIJob"
+	MessageResourceExists = "Resource %q of Kind %q already exists and is not managed by ResilientJob"
 
 	// ValidationError is used as part of the Event 'reason' when failed to
-	// validate an MPIJob.
+	// validate an ResilientJob.
 	ValidationError = "ValidationError"
 
 	// podTemplateRestartPolicyReason is the warning reason when the restart
@@ -141,7 +141,7 @@ var (
 	})
 	mpiJobInfoGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "mpi_operator_job_info",
-		Help: "Information about MPIJob",
+		Help: "Information about ResilientJob",
 	}, []string{"launcher", "namespace"})
 
 	configVolumeItems = []corev1.KeyToPath{
@@ -223,8 +223,8 @@ var (
 	}
 )
 
-// MPIJobController is the controller implementation for MPIJob resources.
-type MPIJobController struct {
+// ResilientJobController is the controller implementation for ResilientJob resources.
+type ResilientJobController struct {
 	// kubeClient is a standard kubernetes clientset.
 	kubeClient kubernetes.Interface
 	// kubeflowClient is a clientset for our own API group.
@@ -245,7 +245,7 @@ type MPIJobController struct {
 	podGroupSynced      cache.InformerSynced
 	priorityClassLister schedulinglisters.PriorityClassLister
 	priorityClassSynced cache.InformerSynced
-	mpiJobLister        listers.MPIJobLister
+	mpiJobLister        listers.ResilientJobLister
 	mpiJobSynced        cache.InformerSynced
 
 	// queue is a rate limited work queue. This is used to queue work to be
@@ -259,7 +259,7 @@ type MPIJobController struct {
 	recorder record.EventRecorder
 
 	// To allow injection of updateStatus for testing.
-	updateStatusHandler func(mpijob *kubeflow.MPIJob) error
+	updateStatusHandler func(resilientjob *kubeflow.ResilientJob) error
 
 	// Clock for internal use of unit-testing
 	clock clock.WithTicker
@@ -270,8 +270,8 @@ type MPIJobController struct {
 	maxBackoffLimit int
 }
 
-// NewMPIJobController returns a new MPIJob controller.
-func NewMPIJobController(
+// NewResilientJobController returns a new ResilientJob controller.
+func NewResilientJobController(
 	kubeClient kubernetes.Interface,
 	kubeflowClient clientset.Interface,
 	volcanoClient volcanoclient.Interface,
@@ -282,16 +282,16 @@ func NewMPIJobController(
 	serviceInformer coreinformers.ServiceInformer,
 	podInformer coreinformers.PodInformer,
 	priorityClassInformer schedulinginformers.PriorityClassInformer,
-	mpiJobInformer informers.MPIJobInformer,
+	mpiJobInformer informers.ResilientJobInformer,
 	namespace, gangSchedulingName, exNamespaces, inNamespaces string,
-	maxBackoffLimit int) *MPIJobController {
-	return NewMPIJobControllerWithClock(kubeClient, kubeflowClient, volcanoClient, schedClient,
+	maxBackoffLimit int) *ResilientJobController {
+	return NewResilientJobControllerWithClock(kubeClient, kubeflowClient, volcanoClient, schedClient,
 		eventInformer, configMapInformer, secretInformer, serviceInformer, podInformer,
 		priorityClassInformer, mpiJobInformer, &clock.RealClock{}, namespace, gangSchedulingName, exNamespaces, inNamespaces, maxBackoffLimit)
 }
 
-// NewMPIJobControllerWithClock returns a new MPIJob controller.
-func NewMPIJobControllerWithClock(
+// NewResilientJobControllerWithClock returns a new ResilientJob controller.
+func NewResilientJobControllerWithClock(
 	kubeClient kubernetes.Interface,
 	kubeflowClient clientset.Interface,
 	volcanoClient volcanoclient.Interface,
@@ -302,10 +302,10 @@ func NewMPIJobControllerWithClock(
 	serviceInformer coreinformers.ServiceInformer,
 	podInformer coreinformers.PodInformer,
 	priorityClassInformer schedulinginformers.PriorityClassInformer,
-	mpiJobInformer informers.MPIJobInformer,
+	mpiJobInformer informers.ResilientJobInformer,
 	clock clock.WithTicker,
 	namespace, gangSchedulingName, exNamespaces, inNamespaces string,
-	maxBackoffLimit int) *MPIJobController {
+	maxBackoffLimit int) *ResilientJobController {
 
 	// Create event broadcaster.
 	klog.V(4).Info("Creating event broadcaster")
@@ -338,7 +338,7 @@ func NewMPIJobControllerWithClock(
 
 	qps := 200
 	burst := 2000
-	controller := &MPIJobController{
+	controller := &ResilientJobController{
 		kubeClient:          kubeClient,
 		kubeflowClient:      kubeflowClient,
 		PodGroupCtrl:        podGroupCtrl,
@@ -361,7 +361,7 @@ func NewMPIJobControllerWithClock(
 			workqueue.NewMaxOfRateLimiter(
 				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 10*time.Second),
 				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(qps), burst)},
-			), "MPIJobs"),
+			), "ResilientJobs"),
 		recorder:          recorder,
 		clock:             clock,
 		excludeNamespaces: excludeNamespaces,
@@ -372,20 +372,20 @@ func NewMPIJobControllerWithClock(
 	controller.updateStatusHandler = controller.doUpdateJobStatus
 
 	klog.Info("Setting up event handlers")
-	// Set up an event handler for when MPIJob resources change.
+	// Set up an event handler for when ResilientJob resources change.
 	mpiJobInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.filterMPIJob,
+		FilterFunc: controller.filterResilientJob,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.addMPIJob,
+			AddFunc: controller.addResilientJob,
 			UpdateFunc: func(old, new interface{}) {
-				controller.enqueueMPIJob(new)
+				controller.enqueueResilientJob(new)
 			},
 		},
 	})
 
 	// Set up an event handler for when dependent resources change. This
 	// handler will lookup the owner of the given resource, and if it is
-	// owned by an MPIJob resource will enqueue that MPIJob resource for
+	// owned by an ResilientJob resource will enqueue that ResilientJob resource for
 	// processing. This way, we don't need to implement custom logic for
 	// handling dependent resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
@@ -428,12 +428,12 @@ func NewMPIJobControllerWithClock(
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the work queue and wait for
 // workers to finish processing their current work items.
-func (c *MPIJobController) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *ResilientJobController) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches.
-	klog.Info("Starting MPIJob controller")
+	klog.Info("Starting ResilientJob controller")
 
 	// Wait for the caches to be synced before starting workers.
 	klog.Info("Waiting for informer caches to sync")
@@ -453,7 +453,7 @@ func (c *MPIJobController) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.Info("Starting workers")
-	// Launch workers to process MPIJob resources.
+	// Launch workers to process ResilientJob resources.
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -468,14 +468,14 @@ func (c *MPIJobController) Run(threadiness int, stopCh <-chan struct{}) error {
 // runWorker is a long-running function that will continually call the
 // processNextWorkItem function in order to read and process a message on the
 // work queue.
-func (c *MPIJobController) runWorker() {
+func (c *ResilientJobController) runWorker() {
 	for c.processNextWorkItem() {
 	}
 }
 
 // processNextWorkItem will read a single work item off the work queue and
 // attempt to process it, by calling the syncHandler.
-func (c *MPIJobController) processNextWorkItem() bool {
+func (c *ResilientJobController) processNextWorkItem() bool {
 	obj, shutdown := c.queue.Get()
 
 	if shutdown {
@@ -509,7 +509,7 @@ func (c *MPIJobController) processNextWorkItem() bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// MPIJob resource to be synced.
+		// ResilientJob resource to be synced.
 		if err := c.syncHandler(key); err != nil {
 			c.queue.AddRateLimited(key)
 			return fmt.Errorf("error syncing '%s': %s", key, err.Error())
@@ -530,9 +530,9 @@ func (c *MPIJobController) processNextWorkItem() bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the MPIJob resource
+// converge the two. It then updates the Status block of the ResilientJob resource
 // with the current status of the resource.
-func (c *MPIJobController) syncHandler(key string) error {
+func (c *ResilientJobController) syncHandler(key string) error {
 	startTime := c.clock.Now()
 
 	// Convert the namespace/name string into a distinct namespace and name.
@@ -546,12 +546,12 @@ func (c *MPIJobController) syncHandler(key string) error {
 		klog.Infof("Finished syncing job %q (%v)", key, c.clock.Since(startTime))
 	}()
 
-	// Get the MPIJob with this namespace/name.
-	sharedJob, err := c.mpiJobLister.MPIJobs(namespace).Get(name)
+	// Get the ResilientJob with this namespace/name.
+	sharedJob, err := c.mpiJobLister.ResilientJobs(namespace).Get(name)
 	if err != nil {
-		// The MPIJob may no longer exist, in which case we stop processing.
+		// The ResilientJob may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
-			klog.V(4).Infof("MPIJob has been deleted: %v", key)
+			klog.V(4).Infof("ResilientJob has been deleted: %v", key)
 			return nil
 		}
 		return fmt.Errorf("obtaining job: %w", err)
@@ -569,16 +569,16 @@ func (c *MPIJobController) syncHandler(key string) error {
 		return nil
 	}
 
-	// If the MPIJob is marked as frozen via the `kubeflow.org/frozen=true`
+	// If the ResilientJob is marked as frozen via the `kubeflow.org/frozen=true`
 	// annotation, pause it: do not change status, do not check for
 	// failures, do not clean up or create pods. The previous behavior
 	// resumes once the annotation is removed or set back to "false".
 	if isFrozen(mpiJob) {
-		klog.V(4).Infof("MPIJob %s/%s is marked frozen; skipping reconciliation", mpiJob.Namespace, mpiJob.Name)
+		klog.V(4).Infof("ResilientJob %s/%s is marked frozen; skipping reconciliation", mpiJob.Namespace, mpiJob.Name)
 		return nil
 	}
 
-	if errs := validation.ValidateMPIJob(mpiJob); len(errs) != 0 {
+	if errs := validation.ValidateResilientJob(mpiJob); len(errs) != 0 {
 		msg := truncateMessage(fmt.Sprintf("Found validation errors: %v", errs.ToAggregate()))
 		c.recorder.Event(mpiJob, corev1.EventTypeWarning, ValidationError, msg)
 		// Do not requeue
@@ -586,15 +586,15 @@ func (c *MPIJobController) syncHandler(key string) error {
 	}
 
 	if len(mpiJob.Status.Conditions) == 0 {
-		msg := fmt.Sprintf("MPIJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
-		updateMPIJobConditions(mpiJob, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
-		c.recorder.Event(mpiJob, corev1.EventTypeNormal, "MPIJobCreated", msg)
+		msg := fmt.Sprintf("ResilientJob %s/%s is created.", mpiJob.Namespace, mpiJob.Name)
+		updateResilientJobConditions(mpiJob, kubeflow.JobCreated, corev1.ConditionTrue, mpiJobCreatedReason, msg)
+		c.recorder.Event(mpiJob, corev1.EventTypeNormal, "ResilientJobCreated", msg)
 		mpiJobsCreatedCount.Inc()
 	}
 
 	// CompletionTime is only filled when the launcher Job succeeded or stopped
 	// retrying (it reached .spec.backoffLimit). If it's filled, we want to
-	// cleanup and stop retrying the MPIJob.
+	// cleanup and stop retrying the ResilientJob.
 	if isFinished(mpiJob.Status) && mpiJob.Status.CompletionTime != nil {
 		c.cleanLauncherIfNeed(mpiJob) // nolint: errcheck
 		if isCleanUpPods(mpiJob.Spec.RunPolicy.CleanPodPolicy) {
@@ -607,12 +607,12 @@ func (c *MPIJobController) syncHandler(key string) error {
 	}
 
 	// first set StartTime.
-	if mpiJob.Status.StartTime == nil && !isMPIJobSuspended(mpiJob) {
+	if mpiJob.Status.StartTime == nil && !isResilientJobSuspended(mpiJob) {
 		now := metav1.Now()
 		mpiJob.Status.StartTime = &now
 	}
 
-	// Get the launcher Pod for this MPIJob.
+	// Get the launcher Pod for this ResilientJob.
 	launcher, err := c.getLauncherPod(mpiJob)
 	if err != nil {
 		return err
@@ -640,8 +640,8 @@ func (c *MPIJobController) syncHandler(key string) error {
 			return fmt.Errorf("creating mpirun-wrapper: %w", err)
 		}
 
-		if !isMPIJobSuspended(mpiJob) {
-			// Get the PodGroup for this MPIJob
+		if !isResilientJobSuspended(mpiJob) {
+			// Get the PodGroup for this ResilientJob
 			if c.PodGroupCtrl != nil {
 				if podGroup, err := c.getOrCreatePodGroups(mpiJob); podGroup == nil || err != nil {
 					return err
@@ -659,7 +659,7 @@ func (c *MPIJobController) syncHandler(key string) error {
 
 		if launcher == nil && !noLauncher(mpiJob) {
 			if isAlreadyRun(mpiJob.Status) && !elasticEnabled(mpiJob) {
-				klog.Infof("MPIJob %s/%s: skip creating launcher", mpiJob.Namespace, mpiJob.Name)
+				klog.Infof("ResilientJob %s/%s: skip creating launcher", mpiJob.Namespace, mpiJob.Name)
 			} else {
 				if mpiJob.Spec.LauncherCreationPolicy == kubeflow.LauncherCreationPolicyAtStartup ||
 					(c.countReadyPods(worker) == len(worker) && c.countReadyPods(horker) == len(horker)) {
@@ -688,15 +688,15 @@ func (c *MPIJobController) syncHandler(key string) error {
 	}
 
 	// cleanup the running worker pods if the MPI job is suspended
-	if isMPIJobSuspended(mpiJob) {
+	if isResilientJobSuspended(mpiJob) {
 		if err := c.cleanUpPods(mpiJob); err != nil {
 			return err
 		}
 	}
 
-	// Finally, we update the status block of the MPIJob resource to reflect the
+	// Finally, we update the status block of the ResilientJob resource to reflect the
 	// current state of the world.
-	err = c.updateMPIJobStatus(mpiJob, launcher, worker, horker)
+	err = c.updateResilientJobStatus(mpiJob, launcher, worker, horker)
 	if err != nil {
 		return err
 	}
@@ -704,12 +704,12 @@ func (c *MPIJobController) syncHandler(key string) error {
 	return nil
 }
 
-func (c *MPIJobController) cleanUpPods(mpiJob *kubeflow.MPIJob) error {
+func (c *ResilientJobController) cleanUpPods(mpiJob *kubeflow.ResilientJob) error {
 	if err := c.deletePods(mpiJob); err != nil {
 		return err
 	}
-	initializeMPIJobStatuses(mpiJob, kubeflow.MPIReplicaTypeWorker)
-	initializeMPIJobStatuses(mpiJob, kubeflow.MPIReplicaTypeHorker)
+	initializeResilientJobStatuses(mpiJob, kubeflow.MPIReplicaTypeWorker)
+	initializeResilientJobStatuses(mpiJob, kubeflow.MPIReplicaTypeHorker)
 	if c.PodGroupCtrl != nil {
 		if err := c.deletePodGroups(mpiJob); err != nil {
 			return err
@@ -721,7 +721,7 @@ func (c *MPIJobController) cleanUpPods(mpiJob *kubeflow.MPIJob) error {
 }
 
 // cleanLauncherIfNeed always delete launcher pod after job completed: failed or succeed
-func (c *MPIJobController) cleanLauncherIfNeed(mpiJob *kubeflow.MPIJob) error {
+func (c *ResilientJobController) cleanLauncherIfNeed(mpiJob *kubeflow.ResilientJob) error {
 	launcher, err := c.getLauncherPod(mpiJob)
 	if launcher == nil || err != nil {
 		return err
@@ -736,7 +736,7 @@ func (c *MPIJobController) cleanLauncherIfNeed(mpiJob *kubeflow.MPIJob) error {
 	return nil
 }
 
-func (c *MPIJobController) cleanFailedPods(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, worker []*corev1.Pod) error {
+func (c *ResilientJobController) cleanFailedPods(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, worker []*corev1.Pod) error {
 	if !elasticEnabled(mpiJob) {
 		return nil
 	}
@@ -916,7 +916,7 @@ func isImageEquals(img1, img2 string) bool {
 	return false
 }
 
-func (c *MPIJobController) syncReplicasImage(mpiJob *kubeflow.MPIJob, pods []*corev1.Pod, rtype kubeflow.MPIReplicaType) error {
+func (c *ResilientJobController) syncReplicasImage(mpiJob *kubeflow.ResilientJob, pods []*corev1.Pod, rtype kubeflow.MPIReplicaType) error {
 	if pods != nil {
 		workerImg := mpiJob.Spec.MPIReplicaSpecs[rtype].Template.Spec.Containers[0].Image
 		for idx := range pods {
@@ -939,7 +939,7 @@ func (c *MPIJobController) syncReplicasImage(mpiJob *kubeflow.MPIJob, pods []*co
 	return nil
 }
 
-func (c *MPIJobController) syncLauncherImage(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod) error {
+func (c *ResilientJobController) syncLauncherImage(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod) error {
 	if launcher != nil {
 		launcherImg := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeLauncher].Template.Spec.Containers[0].Image
 
@@ -961,7 +961,7 @@ func (c *MPIJobController) syncLauncherImage(mpiJob *kubeflow.MPIJob, launcher *
 }
 
 // syncPodImage try to update image of pods according to job image change
-func (c *MPIJobController) syncPodImage(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) error {
+func (c *ResilientJobController) syncPodImage(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) error {
 	if err := c.syncReplicasImage(mpiJob, worker, kubeflow.MPIReplicaTypeWorker); err != nil {
 		return err
 	}
@@ -975,8 +975,8 @@ func (c *MPIJobController) syncPodImage(mpiJob *kubeflow.MPIJob, launcher *corev
 	return nil
 }
 
-// getLauncherPod gets the launcher Job controlled by this MPIJob.
-func (c *MPIJobController) getLauncherPod(mpiJob *kubeflow.MPIJob) (*corev1.Pod, error) {
+// getLauncherPod gets the launcher Job controlled by this ResilientJob.
+func (c *ResilientJobController) getLauncherPod(mpiJob *kubeflow.ResilientJob) (*corev1.Pod, error) {
 	launcher, err := c.podLister.Pods(mpiJob.Namespace).Get(launcherName(mpiJob))
 	if errors.IsNotFound(err) {
 		return nil, nil
@@ -988,7 +988,7 @@ func (c *MPIJobController) getLauncherPod(mpiJob *kubeflow.MPIJob) (*corev1.Pod,
 		return nil, err
 	}
 
-	// If the launcher is not controlled by this MPIJob resource, we should log
+	// If the launcher is not controlled by this ResilientJob resource, we should log
 	// a warning to the event recorder and return.
 	if !metav1.IsControlledBy(launcher, mpiJob) {
 		msg := fmt.Sprintf(MessageResourceExists, launcher.Name, launcher.Kind)
@@ -1000,7 +1000,7 @@ func (c *MPIJobController) getLauncherPod(mpiJob *kubeflow.MPIJob) (*corev1.Pod,
 }
 
 // getOrCreatePodGroups will create a PodGroup for gang scheduling by volcano.
-func (c *MPIJobController) getOrCreatePodGroups(mpiJob *kubeflow.MPIJob) (metav1.Object, error) {
+func (c *ResilientJobController) getOrCreatePodGroups(mpiJob *kubeflow.ResilientJob) (metav1.Object, error) {
 	newPodGroup := c.PodGroupCtrl.newPodGroup(mpiJob)
 	podGroup, err := c.PodGroupCtrl.getPodGroup(newPodGroup.GetNamespace(), newPodGroup.GetName())
 	// If the PodGroup doesn't exist, we'll create it.
@@ -1013,7 +1013,7 @@ func (c *MPIJobController) getOrCreatePodGroups(mpiJob *kubeflow.MPIJob) (metav1
 	if err != nil {
 		return nil, err
 	}
-	// If the PodGroup is not controlled by this MPIJob resource, we
+	// If the PodGroup is not controlled by this ResilientJob resource, we
 	// should log a warning to the event recorder and return.
 	if !metav1.IsControlledBy(podGroup, mpiJob) {
 		msg := fmt.Sprintf(MessageResourceExists, podGroup.GetName(), "PodGroup")
@@ -1027,8 +1027,8 @@ func (c *MPIJobController) getOrCreatePodGroups(mpiJob *kubeflow.MPIJob) (metav1
 	return podGroup, nil
 }
 
-// deletePodGroups will delete a PodGroup when MPIJob have done.
-func (c *MPIJobController) deletePodGroups(mpiJob *kubeflow.MPIJob) error {
+// deletePodGroups will delete a PodGroup when ResilientJob have done.
+func (c *ResilientJobController) deletePodGroups(mpiJob *kubeflow.ResilientJob) error {
 	podGroup, err := c.PodGroupCtrl.getPodGroup(mpiJob.Namespace, mpiJob.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -1037,7 +1037,7 @@ func (c *MPIJobController) deletePodGroups(mpiJob *kubeflow.MPIJob) error {
 		return err
 	}
 
-	// If the PodGroup is not controlled by this MPIJob resource, we
+	// If the PodGroup is not controlled by this ResilientJob resource, we
 	// should log a warning to the event recorder and return.
 	if !metav1.IsControlledBy(podGroup, mpiJob) {
 		msg := fmt.Sprintf(MessageResourceExists, podGroup.GetName(), "PodGroup")
@@ -1057,16 +1057,16 @@ func (c *MPIJobController) deletePodGroups(mpiJob *kubeflow.MPIJob) error {
 	return nil
 }
 
-// getRunningWorkerPods get all worker Pods with Running phase controlled by this MPIJob.
-func (c *MPIJobController) getRunningWorkerPods(mpiJob *kubeflow.MPIJob) ([]*corev1.Pod, error) {
+// getRunningWorkerPods get all worker Pods with Running phase controlled by this ResilientJob.
+func (c *ResilientJobController) getRunningWorkerPods(mpiJob *kubeflow.ResilientJob) ([]*corev1.Pod, error) {
 	return c.getRunningPods(mpiJob, kubeflow.MPIReplicaTypeWorker)
 }
 
-func (c *MPIJobController) getRunningHorkerPods(mpiJob *kubeflow.MPIJob) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getRunningHorkerPods(mpiJob *kubeflow.ResilientJob) ([]*corev1.Pod, error) {
 	return c.getRunningPods(mpiJob, kubeflow.MPIReplicaTypeHorker)
 }
 
-func (c *MPIJobController) getRunningPods(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getRunningPods(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType) ([]*corev1.Pod, error) {
 	selector, err := getSelector(mpiJob.Name, rtype)
 	if err != nil {
 		return nil, err
@@ -1086,7 +1086,7 @@ func (c *MPIJobController) getRunningPods(mpiJob *kubeflow.MPIJob, rtype kubeflo
 	return podList, nil
 }
 
-func (c *MPIJobController) countReadyPods(pods []*corev1.Pod) int {
+func (c *ResilientJobController) countReadyPods(pods []*corev1.Pod) int {
 	ready := 0
 	for _, pod := range pods {
 		for _, c := range pod.Status.Conditions {
@@ -1099,7 +1099,7 @@ func (c *MPIJobController) countReadyPods(pods []*corev1.Pod) int {
 	return ready
 }
 
-func (c *MPIJobController) getOrCreateService(job *kubeflow.MPIJob, newSvc *corev1.Service) (*corev1.Service, error) {
+func (c *ResilientJobController) getOrCreateService(job *kubeflow.ResilientJob, newSvc *corev1.Service) (*corev1.Service, error) {
 	svc, err := c.serviceLister.Services(job.Namespace).Get(newSvc.Name)
 	if errors.IsNotFound(err) {
 		return c.kubeClient.CoreV1().Services(job.Namespace).Create(context.TODO(), newSvc, metav1.CreateOptions{})
@@ -1123,18 +1123,18 @@ func (c *MPIJobController) getOrCreateService(job *kubeflow.MPIJob, newSvc *core
 	return svc, nil
 }
 
-func (c *MPIJobController) getOrCreateWorker(mpiJob *kubeflow.MPIJob) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getOrCreateWorker(mpiJob *kubeflow.ResilientJob) ([]*corev1.Pod, error) {
 	return c.getOrCreateReplicas(mpiJob, kubeflow.MPIReplicaTypeWorker)
 }
 
-func (c *MPIJobController) getOrCreateHorker(mpiJob *kubeflow.MPIJob) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getOrCreateHorker(mpiJob *kubeflow.ResilientJob) ([]*corev1.Pod, error) {
 	return c.getOrCreateReplicas(mpiJob, kubeflow.MPIReplicaTypeHorker)
 }
 
-func (c *MPIJobController) getOrCreateReplicas(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getOrCreateReplicas(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType) ([]*corev1.Pod, error) {
 	hosts := getHostListFromAnnotation(mpiJob, rtype)
 	if len(hosts) > 0 {
-		klog.Infof("MPIJob %s/%s create replicas from annotation", mpiJob.Namespace, mpiJob.Name)
+		klog.Infof("ResilientJob %s/%s create replicas from annotation", mpiJob.Namespace, mpiJob.Name)
 		return c.getOrCreateReplicasByNames(mpiJob, rtype, hosts)
 	}
 
@@ -1177,12 +1177,12 @@ func (c *MPIJobController) getOrCreateReplicas(mpiJob *kubeflow.MPIJob, rtype ku
 		// If the worker Pod doesn't exist, we'll create it.
 		if errors.IsNotFound(err) {
 			if isAlreadyRun(mpiJob.Status) && !elasticEnabled(mpiJob) {
-				klog.Infof("MPIJob %s/%s: skip create %s-%d", mpiJob.Namespace, mpiJob.Name, rtype, i)
+				klog.Infof("ResilientJob %s/%s: skip create %s-%d", mpiJob.Namespace, mpiJob.Name, rtype, i)
 				continue
 			}
 			replicas := c.newReplicas(mpiJob, i, rtype)
 			pod, err = c.kubeClient.CoreV1().Pods(mpiJob.Namespace).Create(context.TODO(), replicas, metav1.CreateOptions{})
-			klog.Infof("MPIJob pod %s/%s created.", mpiJob.Namespace, pod.Name)
+			klog.Infof("ResilientJob pod %s/%s created.", mpiJob.Namespace, pod.Name)
 		}
 		// If an error occurs during Get/Create, we'll requeue the item so we
 		// can attempt processing again later. This could have been caused by a
@@ -1191,7 +1191,7 @@ func (c *MPIJobController) getOrCreateReplicas(mpiJob *kubeflow.MPIJob, rtype ku
 			c.recorder.Eventf(mpiJob, corev1.EventTypeWarning, mpiJobFailedReason, "pod created failed: %v", err)
 			return nil, err
 		}
-		// If the worker is not controlled by this MPIJob resource, we should log
+		// If the worker is not controlled by this ResilientJob resource, we should log
 		// a warning to the event recorder and return.
 		if pod != nil && !metav1.IsControlledBy(pod, mpiJob) {
 			msg := fmt.Sprintf(MessageResourceExists, pod.Name, pod.Kind)
@@ -1204,11 +1204,11 @@ func (c *MPIJobController) getOrCreateReplicas(mpiJob *kubeflow.MPIJob, rtype ku
 	return pods, nil
 }
 
-func isMPIJobSuspended(mpiJob *kubeflow.MPIJob) bool {
+func isResilientJobSuspended(mpiJob *kubeflow.ResilientJob) bool {
 	return pointer.BoolDeref(mpiJob.Spec.RunPolicy.Suspend, false)
 }
 
-func (c *MPIJobController) deletePods(mpiJob *kubeflow.MPIJob) error {
+func (c *ResilientJobController) deletePods(mpiJob *kubeflow.ResilientJob) error {
 	hosts := getFullHostListFromAnnotation(mpiJob)
 	if len(hosts) > 0 {
 		return c.deletePodsFromAnnotation(mpiJob, hosts)
@@ -1223,7 +1223,7 @@ func (c *MPIJobController) deletePods(mpiJob *kubeflow.MPIJob) error {
 	return nil
 }
 
-func (c *MPIJobController) deleteReplicasPods(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType) error {
+func (c *ResilientJobController) deleteReplicasPods(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType) error {
 	worker := mpiJob.Spec.MPIReplicaSpecs[rtype]
 	if worker == nil {
 		return nil
@@ -1237,7 +1237,7 @@ func (c *MPIJobController) deleteReplicasPods(mpiJob *kubeflow.MPIJob, rtype kub
 		if errors.IsNotFound(err) {
 			continue
 		}
-		// If the worker is not controlled by this MPIJob resource, we should log
+		// If the worker is not controlled by this ResilientJob resource, we should log
 		// a warning to the event recorder and return.
 		if pod != nil && !metav1.IsControlledBy(pod, mpiJob) {
 			msg := fmt.Sprintf(MessageResourceExists, pod.Name, pod.Kind)
@@ -1324,7 +1324,7 @@ func getFailedInfo(pod *corev1.Pod) ([]string, []string) {
 // Failed cases:
 // 1. elastic + backofflimit reach
 // 2. no-elastic + pod failed
-func (c *MPIJobController) checkJobFailedWithReason(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) (bool, string, string) {
+func (c *ResilientJobController) checkJobFailedWithReason(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) (bool, string, string) {
 	if launcher == nil && hasLauncher(mpiJob) && isAlreadyRun(mpiJob.Status) && !elasticEnabled(mpiJob) {
 		return true, "LaucherEvicted", "Launcher missing"
 	}
@@ -1381,7 +1381,7 @@ func (c *MPIJobController) checkJobFailedWithReason(mpiJob *kubeflow.MPIJob, lau
 	return false, "", ""
 }
 
-func (c *MPIJobController) isPodPreempted(pod *corev1.Pod) bool {
+func (c *ResilientJobController) isPodPreempted(pod *corev1.Pod) bool {
 	if c.eventLister == nil {
 		return false
 	}
@@ -1399,31 +1399,31 @@ func (c *MPIJobController) isPodPreempted(pod *corev1.Pod) bool {
 	return false
 }
 
-func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) error {
+func (c *ResilientJobController) updateResilientJobStatus(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, worker []*corev1.Pod, horker []*corev1.Pod) error {
 	oldStatus := mpiJob.Status.DeepCopy()
-	if isMPIJobSuspended(mpiJob) {
+	if isResilientJobSuspended(mpiJob) {
 		// it is suspended now
-		if updateMPIJobConditions(mpiJob, kubeflow.JobSuspended, corev1.ConditionTrue, mpiJobSuspendedReason, "MPIJob suspended") {
-			c.recorder.Event(mpiJob, corev1.EventTypeNormal, "MPIJobSuspended", "MPIJob suspended")
+		if updateResilientJobConditions(mpiJob, kubeflow.JobSuspended, corev1.ConditionTrue, mpiJobSuspendedReason, "ResilientJob suspended") {
+			c.recorder.Event(mpiJob, corev1.EventTypeNormal, "ResilientJobSuspended", "ResilientJob suspended")
 		}
 	} else if getCondition(mpiJob.Status, kubeflow.JobSuspended) != nil {
 		// it is not suspended now, consider resumed if the condition was set before
-		if updateMPIJobConditions(mpiJob, kubeflow.JobSuspended, corev1.ConditionFalse, mpiJobResumedReason, "MPIJob resumed") {
-			c.recorder.Event(mpiJob, corev1.EventTypeNormal, "MPIJobResumed", "MPIJob resumed")
+		if updateResilientJobConditions(mpiJob, kubeflow.JobSuspended, corev1.ConditionFalse, mpiJobResumedReason, "ResilientJob resumed") {
+			c.recorder.Event(mpiJob, corev1.EventTypeNormal, "ResilientJobResumed", "ResilientJob resumed")
 			now := metav1.NewTime(c.clock.Now())
 			mpiJob.Status.StartTime = &now
 		}
 	}
-	initializeMPIJobStatuses(mpiJob, kubeflow.MPIReplicaTypeLauncher)
+	initializeResilientJobStatuses(mpiJob, kubeflow.MPIReplicaTypeLauncher)
 	if launcher != nil {
 		if isLauncherSucceeded(launcher) {
-			msg := fmt.Sprintf("MPIJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
+			msg := fmt.Sprintf("ResilientJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
 			c.recorder.Event(mpiJob, corev1.EventTypeNormal, mpiJobSucceededReason, msg)
 			if mpiJob.Status.CompletionTime == nil {
 				now := metav1.Now()
 				mpiJob.Status.CompletionTime = &now
 			}
-			updateMPIJobConditions(mpiJob, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
+			updateResilientJobConditions(mpiJob, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
 			mpiJobsSuccessCount.Inc()
 			mpiJob.Status.ReplicaStatuses[kubeflow.MPIReplicaTypeLauncher].Succeeded = 1
 		} else if isPodRunning(launcher) {
@@ -1435,18 +1435,18 @@ func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher 
 	}
 	if !isFinished(mpiJob.Status) {
 		if failed, reason, message := c.checkJobFailedWithReason(mpiJob, launcher, worker, horker); failed {
-			msg := fmt.Sprintf("MPIJob %s/%s failed: %s", mpiJob.Namespace, mpiJob.Name, message)
+			msg := fmt.Sprintf("ResilientJob %s/%s failed: %s", mpiJob.Namespace, mpiJob.Name, message)
 			c.recorder.Event(mpiJob, corev1.EventTypeWarning, mpiJobFailedReason, truncateMessage(msg))
 			if mpiJob.Status.CompletionTime == nil {
 				now := metav1.Now()
 				mpiJob.Status.CompletionTime = &now
 			}
-			updateMPIJobConditions(mpiJob, kubeflow.JobFailed, corev1.ConditionTrue, reason, msg)
+			updateResilientJobConditions(mpiJob, kubeflow.JobFailed, corev1.ConditionTrue, reason, msg)
 			mpiJobsFailureCount.Inc()
 		}
 	}
 
-	initializeMPIJobStatuses(mpiJob, kubeflow.MPIReplicaTypeWorker)
+	initializeResilientJobStatuses(mpiJob, kubeflow.MPIReplicaTypeWorker)
 	//spec := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker]
 	workerSucc := 0
 	for i := 0; i < len(worker); i++ {
@@ -1461,7 +1461,7 @@ func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher 
 		}
 	}
 
-	initializeMPIJobStatuses(mpiJob, kubeflow.MPIReplicaTypeHorker)
+	initializeResilientJobStatuses(mpiJob, kubeflow.MPIReplicaTypeHorker)
 	horkerSucc := 0
 	for i := 0; i < len(horker); i++ {
 		switch horker[i].Status.Phase {
@@ -1477,32 +1477,32 @@ func (c *MPIJobController) updateMPIJobStatus(mpiJob *kubeflow.MPIJob, launcher 
 
 	if mpiJob.Status.CompletionTime == nil {
 		if noLauncher(mpiJob) && workerSucc == len(worker) && horkerSucc == len(horker) {
-			msg := fmt.Sprintf("MPIJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
+			msg := fmt.Sprintf("ResilientJob %s/%s successfully completed.", mpiJob.Namespace, mpiJob.Name)
 			c.recorder.Event(mpiJob, corev1.EventTypeNormal, mpiJobSucceededReason, msg)
 			now := metav1.Now()
 			mpiJob.Status.CompletionTime = &now
-			updateMPIJobConditions(mpiJob, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
+			updateResilientJobConditions(mpiJob, kubeflow.JobSucceeded, corev1.ConditionTrue, mpiJobSucceededReason, msg)
 		}
 
-		if isMPIJobSuspended(mpiJob) {
-			msg := fmt.Sprintf("MPIJob %s/%s is suspended.", mpiJob.Namespace, mpiJob.Name)
-			updateMPIJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionFalse, mpiJobSuspendedReason, msg)
+		if isResilientJobSuspended(mpiJob) {
+			msg := fmt.Sprintf("ResilientJob %s/%s is suspended.", mpiJob.Namespace, mpiJob.Name)
+			updateResilientJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionFalse, mpiJobSuspendedReason, msg)
 		} else if allContainerRunning(mpiJob, launcher, worker, horker) {
-			msg := fmt.Sprintf("MPIJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
-			updateMPIJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
-			c.recorder.Eventf(mpiJob, corev1.EventTypeNormal, mpiJobRunningReason, "MPIJob %s/%s is running", mpiJob.Namespace, mpiJob.Name)
+			msg := fmt.Sprintf("ResilientJob %s/%s is running.", mpiJob.Namespace, mpiJob.Name)
+			updateResilientJobConditions(mpiJob, kubeflow.JobRunning, corev1.ConditionTrue, mpiJobRunningReason, msg)
+			c.recorder.Eventf(mpiJob, corev1.EventTypeNormal, mpiJobRunningReason, "ResilientJob %s/%s is running", mpiJob.Namespace, mpiJob.Name)
 			updateStatusSelector(mpiJob, launcher, worker, horker)
 		}
 	}
 
-	// no need to update the mpijob if the status hasn't changed since last time.
+	// no need to update the resilientjob if the status hasn't changed since last time.
 	if !reflect.DeepEqual(*oldStatus, mpiJob.Status) {
 		return c.updateStatusHandler(mpiJob)
 	}
 	return nil
 }
 
-func updateStatusSelector(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) {
+func updateStatusSelector(mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod) {
 	if launcher != nil && launcher.Status.PodIP != "" {
 		mpiJob.Status.ReplicaStatuses[kubeflow.MPIReplicaTypeLauncher].Selector = launcher.Status.PodIP
 	}
@@ -1532,15 +1532,15 @@ func updateStatusSelector(mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers
 	}
 }
 
-func (c *MPIJobController) filterMPIJob(obj interface{}) bool {
-	mpiJob, ok := obj.(*kubeflow.MPIJob)
+func (c *ResilientJobController) filterResilientJob(obj interface{}) bool {
+	mpiJob, ok := obj.(*kubeflow.ResilientJob)
 	if !ok {
 		return false
 	}
 	return c.filterObjNamespace(mpiJob.Namespace)
 }
 
-func (c *MPIJobController) filterObjNamespace(ns string) bool {
+func (c *ResilientJobController) filterObjNamespace(ns string) bool {
 	if _, ok := c.excludeNamespaces[ns]; ok {
 		return false
 	}
@@ -1556,18 +1556,18 @@ func (c *MPIJobController) filterObjNamespace(ns string) bool {
 }
 
 // When a mpiJob is added, set the defaults and enqueue the current mpiJob.
-func (c *MPIJobController) addMPIJob(obj interface{}) {
-	mpiJob := obj.(*kubeflow.MPIJob)
+func (c *ResilientJobController) addResilientJob(obj interface{}) {
+	mpiJob := obj.(*kubeflow.ResilientJob)
 
 	// Set default for the new mpiJob.
 	scheme.Scheme.Default(mpiJob)
-	c.enqueueMPIJob(mpiJob)
+	c.enqueueResilientJob(mpiJob)
 }
 
-// enqueueMPIJob takes a MPIJob resource and converts it into a namespace/name
+// enqueueResilientJob takes a ResilientJob resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than MPIJob.
-func (c *MPIJobController) enqueueMPIJob(obj interface{}) {
+// passed resources of any type other than ResilientJob.
+func (c *ResilientJobController) enqueueResilientJob(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -1580,11 +1580,11 @@ func (c *MPIJobController) enqueueMPIJob(obj interface{}) {
 }
 
 // handleObject will take any resource implementing metav1.Object and attempt
-// to find the MPIJob resource that 'owns' it. It does this by looking at the
+// to find the ResilientJob resource that 'owns' it. It does this by looking at the
 // objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that MPIJob resource to be processed. If the object does not
+// It then enqueues that ResilientJob resource to be processed. If the object does not
 // have an appropriate OwnerReference, it will simply be skipped.
-func (c *MPIJobController) handleObject(obj interface{}) {
+func (c *ResilientJobController) handleObject(obj interface{}) {
 	var object metav1.Object
 	var ok bool
 	if object, ok = obj.(metav1.Object); !ok {
@@ -1617,16 +1617,16 @@ func (c *MPIJobController) handleObject(obj interface{}) {
 		return
 	}
 
-	mpiJob, err := c.mpiJobLister.MPIJobs(object.GetNamespace()).Get(ownerRef.Name)
+	mpiJob, err := c.mpiJobLister.ResilientJobs(object.GetNamespace()).Get(ownerRef.Name)
 	if err != nil {
 		klog.V(4).Infof("ignoring orphaned object '%s' of mpi job '%s'", object.GetSelfLink(), ownerRef.Name)
 		return
 	}
 
-	c.enqueueMPIJob(mpiJob)
+	c.enqueueResilientJob(mpiJob)
 }
 
-func (c *MPIJobController) handleObjectUpdate(old, new interface{}) {
+func (c *ResilientJobController) handleObjectUpdate(old, new interface{}) {
 	oldObj := old.(metav1.Object)
 	newObj := new.(metav1.Object)
 	if newObj.GetResourceVersion() == oldObj.GetResourceVersion() {
@@ -1638,16 +1638,16 @@ func (c *MPIJobController) handleObjectUpdate(old, new interface{}) {
 	c.handleObject(new)
 }
 
-// doUpdateJobStatus updates the status of the given MPIJob by call apiServer.
-func (c *MPIJobController) doUpdateJobStatus(mpiJob *kubeflow.MPIJob) error {
-	_, err := c.kubeflowClient.KubeflowV2beta1().MPIJobs(mpiJob.Namespace).UpdateStatus(context.TODO(), mpiJob, metav1.UpdateOptions{})
+// doUpdateJobStatus updates the status of the given ResilientJob by call apiServer.
+func (c *ResilientJobController) doUpdateJobStatus(mpiJob *kubeflow.ResilientJob) error {
+	_, err := c.kubeflowClient.KubeflowV2beta1().ResilientJobs(mpiJob.Namespace).UpdateStatus(context.TODO(), mpiJob, metav1.UpdateOptions{})
 	return err
 }
 
-// newWorker creates a new worker Pod for an MPIJob resource. It also
+// newWorker creates a new worker Pod for an ResilientJob resource. It also
 // sets the appropriate OwnerReferences on the resource so handleObject can
-// discover the MPIJob resource that 'owns' it.
-func (c *MPIJobController) newReplicas(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaType) *corev1.Pod {
+// discover the ResilientJob resource that 'owns' it.
+func (c *ResilientJobController) newReplicas(mpiJob *kubeflow.ResilientJob, index int, rtype kubeflow.MPIReplicaType) *corev1.Pod {
 	name := replicasName(mpiJob, index, rtype)
 
 	podTemplate := mpiJob.Spec.MPIReplicaSpecs[rtype].Template.DeepCopy()
@@ -1715,7 +1715,7 @@ func (c *MPIJobController) newReplicas(mpiJob *kubeflow.MPIJob, index int, rtype
 	}
 }
 
-func (c *MPIJobController) newLauncherPod(mpiJob *kubeflow.MPIJob) *corev1.Pod {
+func (c *ResilientJobController) newLauncherPod(mpiJob *kubeflow.ResilientJob) *corev1.Pod {
 	podTemplate := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeLauncher].Template.DeepCopy()
 	// copy the labels and annotations to pod from PodTemplate
 	if len(podTemplate.Labels) == 0 {

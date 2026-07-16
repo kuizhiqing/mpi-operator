@@ -21,8 +21,8 @@ import (
 
 	"k8s.io/klog"
 
-	"github.com/kubeflow/mpi-operator/cmd/heter-controller/app"
-	"github.com/kubeflow/mpi-operator/cmd/heter-controller/app/options"
+	"github.com/kuizhiqing/resilient-training-operator/cmd/heter-controller/app"
+	"github.com/kuizhiqing/resilient-training-operator/cmd/heter-controller/app/options"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
