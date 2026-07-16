@@ -28,7 +28,7 @@ type ResilientJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              ResilientJobSpec `json:"spec,omitempty"`
-	Status            JobStatus  `json:"status,omitempty"`
+	Status            JobStatus        `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -176,6 +176,50 @@ type ResilientJobSpec struct {
 	// +kubebuilder:validation:Enum:=OpenMPI;Intel;MPICH
 	// +kubebuilder:default:=OpenMPI
 	MPIImplementation MPIImplementation `json:"mpiImplementation,omitempty"`
+
+	// ElasticPolicy configures elastic, fault-tolerant execution. When omitted,
+	// elastic behavior is enabled by default.
+	// +optional
+	ElasticPolicy *ElasticPolicy `json:"elasticPolicy,omitempty"`
+
+	// RecoverPolicy configures launcher auto-recovery. When omitted, recovery is
+	// disabled and the standard mpirun wrapper is used.
+	// +optional
+	RecoverPolicy *RecoverPolicy `json:"recoverPolicy,omitempty"`
+
+	// LauncherAsWorker runs a worker process inside the launcher pod, so the
+	// launcher also participates in the MPI hostfile. Defaults to true.
+	// +optional
+	// +kubebuilder:default:=true
+	LauncherAsWorker *bool `json:"launcherAsWorker,omitempty"`
+
+	// Frozen pauses reconciliation: while true the controller makes no status
+	// changes and performs no Pod create/clean-up, leaving existing Pods
+	// running. Unlike RunPolicy.suspend, it does not delete Pods. Defaults to false.
+	// +optional
+	// +kubebuilder:default:=false
+	Frozen *bool `json:"frozen,omitempty"`
+}
+
+// ElasticPolicy configures elastic, fault-tolerant execution: failed or lost
+// worker pods are restarted and recreated so the job can survive transient
+// failures instead of failing outright.
+type ElasticPolicy struct {
+	// Enabled toggles elastic behavior. Defaults to true.
+	// +optional
+	// +kubebuilder:default:=true
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// RecoverPolicy configures auto-recovery: when enabled, the launcher runs the
+// fault-tolerant mpirun wrapper that barriers on peers and restarts the user
+// command on failure.
+type RecoverPolicy struct {
+	// Enabled toggles the fault-tolerant recover wrapper. Defaults to true when
+	// the RecoverPolicy block is present.
+	// +optional
+	// +kubebuilder:default:=true
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // MPIReplicaType is the type for MPIReplica.

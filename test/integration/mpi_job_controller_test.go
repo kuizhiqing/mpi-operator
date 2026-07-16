@@ -314,12 +314,10 @@ func TestResilientJobFailure(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "job",
 			Namespace: s.namespace,
-			Labels: map[string]string{
-				"kubeflow.org/elastic": "false",
-			},
 		},
 		Spec: kubeflow.ResilientJobSpec{
 			SlotsPerWorker: newInt32(1),
+			ElasticPolicy:  &kubeflow.ElasticPolicy{Enabled: pointer.Bool(false)},
 			RunPolicy: kubeflow.RunPolicy{
 				CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
 			},
@@ -426,12 +424,10 @@ func TestResilientJobFailOver(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "job",
 			Namespace: s.namespace,
-			Labels: map[string]string{
-				"kubeflow.org/elastic": "true",
-			},
 		},
 		Spec: kubeflow.ResilientJobSpec{
 			SlotsPerWorker: newInt32(1),
+			ElasticPolicy:  &kubeflow.ElasticPolicy{Enabled: pointer.Bool(true)},
 			RunPolicy: kubeflow.RunPolicy{
 				CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
 			},
@@ -593,12 +589,10 @@ func TestLowPriorityResilientJobFailOver(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "job",
 			Namespace: s.namespace,
-			Labels: map[string]string{
-				"kubeflow.org/elastic": "false",
-			},
 		},
 		Spec: kubeflow.ResilientJobSpec{
 			SlotsPerWorker: newInt32(1),
+			ElasticPolicy:  &kubeflow.ElasticPolicy{Enabled: pointer.Bool(false)},
 			RunPolicy:      kubeflow.RunPolicy{
 				// CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
 			},

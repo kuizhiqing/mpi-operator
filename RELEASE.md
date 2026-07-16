@@ -1,5 +1,23 @@
 # Resilient Training Operator Releases
 
+## Unreleased
+
+* Typed elastic / fault-tolerant API. The behaviors previously toggled by
+  annotations/labels are now first-class `ResilientJobSpec` fields.
+  * **Breaking change**: the controller no longer reads these annotations/labels.
+    Migrate to the typed fields:
+
+    | Old annotation/label | New spec field | Default |
+    |---|---|---|
+    | `kubeflow.org/elastic` | `spec.elasticPolicy.enabled` | `true` |
+    | `kubeflow.org/recover` (presence) | `spec.recoverPolicy.enabled` | `false` (omit block = off) |
+    | `kubeflow.org/launcher-as-worker` | `spec.launcherAsWorker` | `true` |
+    | `kubeflow.org/frozen` | `spec.frozen` | `false` |
+
+    The `kubeflow.org/recover` annotation's runtime *value* (e.g. `"debug"`) is
+    still honored as a live recover-state signal; only its enable-by-presence
+    role moved to `spec.recoverPolicy`. See `examples/v2beta1/pi/pi-elastic.yaml`.
+
 ## Release v0.4.0
 * Breaking changes
   * Removed v1 operator. If you want to use ResilientJob v1, you can use the training-operator.

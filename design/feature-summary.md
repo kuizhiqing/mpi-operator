@@ -112,14 +112,23 @@ Reconcile responsibilities:
 11. On launcher completion: clean up dependents per `cleanPodPolicy`, schedule
     TTL GC.
 
-Annotations (`kubeflow.org/`):
+Typed spec fields (formerly `kubeflow.org/` annotations, promoted in the
+elastic/fault-tolerant API pass):
 
-* `elastic` — enables `discover_hosts.sh` and dynamic worker addition/removal
-* `recover` — runs the launcher under `mpirun-recover.sh` so the user command
-  is restarted in-place on non-zero exit (with python-process kill, peer
-  barrier, environ resync)
-* `launcher-as-worker` — the launcher slot is also a worker (saves a pod)
-* `frozen` — pause reconciliation
+* `spec.elasticPolicy.enabled` (was `kubeflow.org/elastic`, default true) —
+  enables `discover_hosts.sh` and dynamic worker addition/removal
+* `spec.recoverPolicy.enabled` (was `kubeflow.org/recover` presence, default
+  off) — runs the launcher under `mpirun-recover.sh` so the user command is
+  restarted in-place on non-zero exit (with python-process kill, peer barrier,
+  environ resync)
+* `spec.launcherAsWorker` (was `kubeflow.org/launcher-as-worker`, default true)
+  — the launcher slot is also a worker (saves a pod)
+* `spec.frozen` (was `kubeflow.org/frozen`, default false) — pause reconciliation
+
+Remaining annotations (`kubeflow.org/`):
+
+* `recover` — runtime recover-state signal only (e.g. value `"debug"` pauses the
+  recover wrapper); enablement now lives in `spec.recoverPolicy`
 * `heter-job`, `heter-role`, `heter-ip-list` — see §3.2
 
 Other heuristics (`mpi_job_controller.go:99-101`):
