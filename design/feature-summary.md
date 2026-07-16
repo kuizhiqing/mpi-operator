@@ -1,8 +1,8 @@
-# Feature Summary — kmpi-operator
+# Feature Summary — kresilient-training-operator
 
 > Snapshot date: 2026-05-25
-> Repo: `github.com/kubeflow/mpi-operator` (this checkout: `kmpi-operator`, an
-> internally-extended fork of Kubeflow's MPI Operator)
+> Repo: `github.com/kuizhiqing/resilient-training-operator` (this checkout: `kresilient-training-operator`, an
+> internally-extended fork of Kubeflow's Resilient Training Operator)
 > Go version: see `go.mod` · CRD version: `kubeflow.org/v2beta1`
 
 This document inventories every user-visible and operator-visible capability
@@ -13,23 +13,23 @@ in the codebase as it stands today. It is the canonical reference used by
 
 ## 1. Mission & Scope
 
-The MPI Operator runs *allreduce-style distributed training* (Horovod,
+The Resilient Training Operator runs *allreduce-style distributed training* (Horovod,
 TensorFlow, PyTorch + Horovod, custom MPI binaries) on Kubernetes. It owns the
-`MPIJob` CRD and converts it into the Pods/Services/ConfigMaps/Secrets/PodGroups
+`ResilientJob` CRD and converts it into the Pods/Services/ConfigMaps/Secrets/PodGroups
 required to bootstrap an MPI ring across a launcher and N workers, with
 optional heterogeneous workers.
 
 This fork adds large-scale-training-specific capabilities on top of upstream
 v2beta1: a heterogeneous "Horker" replica role, a fault-tolerant
 `mpirun-recover.sh` execution shell, freeze/unfreeze reconciliation, a separate
-`heter-controller` binary that wires two MPIJobs together, and namespace
+`heter-controller` binary that wires two ResilientJobs together, and namespace
 scoping for multi-tenant clusters.
 
 ---
 
 ## 2. CRD & API Surface (`pkg/apis/kubeflow/v2beta1`)
 
-### 2.1 `MPIJob` top-level fields
+### 2.1 `ResilientJob` top-level fields
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
@@ -84,9 +84,9 @@ scoping for multi-tenant clusters.
 
 ## 3. Controllers (`pkg/controller`)
 
-### 3.1 `MPIJobController` — `mpi_job_controller.go` (1858 LoC)
+### 3.1 `ResilientJobController` — `mpi_job_controller.go` (1858 LoC)
 
-Primary reconciler. Watches MPIJobs plus dependent ConfigMaps, Secrets,
+Primary reconciler. Watches ResilientJobs plus dependent ConfigMaps, Secrets,
 Services, Pods, PodGroups, PriorityClasses.
 
 Reconcile responsibilities:
@@ -130,10 +130,10 @@ Other heuristics (`mpi_job_controller.go:99-101`):
 
 ### 3.2 `HeterJobController` — `heter_job_controller.go` (455 LoC)
 
-Wires two MPIJobs into a heterogeneous training pair (e.g. a CPU-launcher job
+Wires two ResilientJobs into a heterogeneous training pair (e.g. a CPU-launcher job
 and a GPU-worker job that need each other's IP lists).
 
-* Reads `kubeflow.org/heter-job` on each MPIJob to find its peer.
+* Reads `kubeflow.org/heter-job` on each ResilientJob to find its peer.
 * Reads `kubeflow.org/heter-role` to identify launcher vs. worker side.
 * Copies the worker side's IP list into the launcher side's
   `kubeflow.org/heter-ip-list` annotation each tick.
@@ -178,7 +178,7 @@ Selected at startup via `--gang-scheduling=volcano|scheduler-plugins|<name>`.
 
 ## 4. Binaries & CLI
 
-### 4.1 `cmd/mpi-operator` flags
+### 4.1 `cmd/resilient-training-operator` flags
 
 `--master`, `--kube-config`, `--namespace` (defaults to env
 `KUBEFLOW_NAMESPACE`), `--threadiness` (2), `--restart-limit` (5),
@@ -215,7 +215,7 @@ Metrics are exposed on `--monitoring-port` (disabled when `0`).
 ### 6.1 `manifests/`
 
 * `base/` — Deployment, ServiceAccount, ClusterRole, ClusterRoleBinding,
-  CRD (`kubeflow.org_mpijobs.yaml`), kustomization.
+  CRD (`kubeflow.org_resilientjobs.yaml`), kustomization.
 * `overlays/standalone/` — namespace + patch for standalone install.
 * `overlays/kubeflow/` — overlay for Kubeflow umbrella distributions.
 * `overlays/dev/` — local-dev patch (image swap via `IMAGE_NAME` /
@@ -223,7 +223,7 @@ Metrics are exposed on `--monitoring-port` (disabled when `0`).
 
 ### 6.2 `deploy/v2beta1/`
 
-* `mpi-operator.yaml` — single-file deployment manifest.
+* `resilient-training-operator.yaml` — single-file deployment manifest.
 
 ### 6.3 Examples (`examples/v2beta1/`)
 
@@ -237,7 +237,7 @@ Metrics are exposed on `--monitoring-port` (disabled when `0`).
 
 A Python client generated from the OpenAPI schema. Includes:
 
-* CRUD wrappers around `MPIJob`.
+* CRUD wrappers around `ResilientJob`.
 * Generated docs.
 * `tensorflow-mnist.py` end-to-end example.
 * Test suite + `requirements.txt` / `test-requirements.txt`.
@@ -248,7 +248,7 @@ Generation script: `hack/python-sdk/`.
 
 ## 8. Build & Tooling
 
-* **Makefile** — targets: `mpi-operator.v2`, `heter`, `images`, `test_images`,
+* **Makefile** — targets: `resilient-training-operator.v2`, `heter`, `images`, `test_images`,
   `test`, `test_e2e`, `dev_manifest`, `generate`, `verify-generate`,
   `scheduler-plugins-crd`, `volcano-scheduler-crd`, `kind`, `helm`.
 * **Dockerfiles** — `Dockerfile` (amd64), `arm.dockerfile` (arm64),
@@ -284,7 +284,7 @@ combined — flag for cleanup).
 
 ---
 
-## 11. Fork-Specific Capabilities (vs. upstream `kubeflow/mpi-operator`)
+## 11. Fork-Specific Capabilities (vs. upstream `kuizhiqing/resilient-training-operator`)
 
 | Feature | Upstream? | Where |
 |---------|-----------|-------|

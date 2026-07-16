@@ -1,6 +1,6 @@
 # Kubeflow Contributor Guide
 
-Welcome to the Kubeflow/MPI-Operator project! We'd love to accept your patches and 
+Welcome to the Kubeflow/Resilient Training Operator project! We'd love to accept your patches and 
 contributions to this project. Please read the 
 [contributor's guide in our docs](https://www.kubeflow.org/docs/about/contributing/).
 
@@ -19,7 +19,7 @@ If you haven't done so, please follow the instructions [here](https://help.githu
 ```bash
 mkdir -p ${GOPATH}/src/github.com/kubeflow
 cd ${GOPATH}/src/github.com/kubeflow
-git clone https://github.com/${GITHUB_USER}/mpi-operator.git
+git clone https://github.com/${GITHUB_USER}/resilient-training-operator.git
 ```
 
 ## Install Dependencies
@@ -75,16 +75,16 @@ make images dev_manifest
 kubectl apply -k manifests/overlays/dev
 ```
 
-The controller handles MPIJobs with API version v2beta1 or newer.
+The controller handles ResilientJobs with API version v2beta1 or newer.
 
 If you need to use a different registry, or a different tag, you can do:
 
 ```bash
-make IMAGE_NAME=example.com/mpi-operator RELEASE_VERSION=dev make images dev_manifest
+make IMAGE_NAME=example.com/resilient-training-operator RELEASE_VERSION=dev make images dev_manifest
 ```
 
 To look at the controller's logs, you can do:
 
 ```shell
-kubectl logs -n mpi-operator -f deployment/mpi-operator
+kubectl logs -n resilient-training-operator -f deployment/resilient-training-operator
 ```

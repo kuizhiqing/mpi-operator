@@ -1,4 +1,4 @@
-# Roadmap — kmpi-operator
+# Roadmap — kresilient-training-operator
 
 > Companion to `feature-summary.md` and `improvements.md`.
 > Horizon: Q3 2026 → Q4 2027.
@@ -45,7 +45,7 @@ links to a concrete deliverable in `plan.md`.
 
 ### Reliability & Fault Tolerance
 - **R1.** Promote `mpirun-recover.sh` from "annotation opt-in" to a `recovery`
-  block in `MPIJobSpec` with knobs for: max restart attempts, kill-signal
+  block in `ResilientJobSpec` with knobs for: max restart attempts, kill-signal
   escalation timeout, peer-barrier timeout, environ-resync interval. Keep the
   recover script behavior identical for compatibility, but make the values
   configurable instead of hard-coded.
@@ -99,7 +99,7 @@ links to a concrete deliverable in `plan.md`.
 - **S3.** Sharded reconcile queue per `MPIImplementation` (or per gang
   scheduler) so a large `Volcano` queue stall does not block `OpenMPI` jobs.
 - **S4.** Pod adoption (vs. recreation) on operator restart for long-running
-  MPIJobs.
+  ResilientJobs.
 - **S5.** Optionally back the launcher with `batch/v1.Job` (Indexed) so the
   Job controller handles backoff. Already discussed in
   `proposals/scalable-robust-operator.md`.
@@ -109,7 +109,7 @@ links to a concrete deliverable in `plan.md`.
   `affinity/tolerations` defaults, `topologyKey` configuration, separate
   `slotsPerHorker`.
 - **H2.** Replace the cross-job IP-list sync (`heter-controller`) with a
-  single-MPIJob-with-multiple-pools model, eliminating one binary and one
+  single-ResilientJob-with-multiple-pools model, eliminating one binary and one
   failure mode.
 - **H3.** Kueue integration — emit a `Workload` so the cluster admin can
   manage queueing/preemption from Kueue rather than Volcano-only.
@@ -142,8 +142,8 @@ links to a concrete deliverable in `plan.md`.
 ## Later — H2 2027
 
 ### API & UX
-- **A6.** GraduateMPIJob to `v1` (stable) once the Kubeflow umbrella aligns.
-- **A7.** `MPIJobTemplate` resource for reusable workload templates (blueprints
+- **A6.** GraduateResilientJob to `v1` (stable) once the Kubeflow umbrella aligns.
+- **A7.** `ResilientJobTemplate` resource for reusable workload templates (blueprints
   imported from Argo).
 
 ### Reliability
@@ -153,7 +153,7 @@ links to a concrete deliverable in `plan.md`.
   signal that the controller can drive.
 
 ### Scale & Performance
-- **S6.** Multi-cluster MPIJob (federation) for >10k-rank jobs that span
+- **S6.** Multi-cluster ResilientJob (federation) for >10k-rank jobs that span
   clusters.
 - **S7.** Rank-zero scheduling guarantees for stragglers (already partial via
   `priorityClass`).

@@ -33,11 +33,11 @@ import (
 	"k8s.io/klog"
 	"k8s.io/utils/clock"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
-	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions/kubeflow/v2beta1"
-	listers "github.com/kubeflow/mpi-operator/pkg/client/listers/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
+	clientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/scheme"
+	informers "github.com/kuizhiqing/resilient-training-operator/pkg/client/informers/externalversions/kubeflow/v2beta1"
+	listers "github.com/kuizhiqing/resilient-training-operator/pkg/client/listers/kubeflow/v2beta1"
 )
 
 const (
@@ -48,14 +48,14 @@ const (
 
 var ()
 
-// HeterJobController is the controller implementation for MPIJob resources.
+// HeterJobController is the controller implementation for ResilientJob resources.
 type HeterJobController struct {
 	// kubeClient is a standard kubernetes clientset.
 	kubeClient kubernetes.Interface
 	// kubeflowClient is a clientset for our own API group.
 	kubeflowClient clientset.Interface
 
-	mpiJobLister listers.MPIJobLister
+	mpiJobLister listers.ResilientJobLister
 	mpiJobSynced cache.InformerSynced
 
 	// queue is a rate limited work queue. This is used to queue work to be
@@ -75,11 +75,11 @@ type HeterJobController struct {
 	includeNamespaces map[string]bool
 }
 
-// NewHeterJobController returns a new MPIJob controller.
+// NewHeterJobController returns a new ResilientJob controller.
 func NewHeterJobController(
 	kubeClient kubernetes.Interface,
 	kubeflowClient clientset.Interface,
-	mpiJobInformer informers.MPIJobInformer,
+	mpiJobInformer informers.ResilientJobInformer,
 	namespace, exNamespaces, inNamespaces string,
 ) *HeterJobController {
 	return NewHeterJobControllerWithClock(
@@ -92,11 +92,11 @@ func NewHeterJobController(
 		inNamespaces)
 }
 
-// NewHeterJobControllerWithClock returns a new MPIJob controller.
+// NewHeterJobControllerWithClock returns a new ResilientJob controller.
 func NewHeterJobControllerWithClock(
 	kubeClient kubernetes.Interface,
 	kubeflowClient clientset.Interface,
-	mpiJobInformer informers.MPIJobInformer,
+	mpiJobInformer informers.ResilientJobInformer,
 	clock clock.WithTicker,
 	namespace, exNamespaces, inNamespaces string,
 ) *HeterJobController {
@@ -116,7 +116,7 @@ func NewHeterJobControllerWithClock(
 		kubeflowClient:    kubeflowClient,
 		mpiJobLister:      mpiJobInformer.Lister(),
 		mpiJobSynced:      mpiJobInformer.Informer().HasSynced,
-		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter(), "MPIJobs"),
+		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter(), "ResilientJobs"),
 		recorder:          recorder,
 		clock:             clock,
 		excludeNamespaces: excludeNamespaces,
@@ -124,15 +124,15 @@ func NewHeterJobControllerWithClock(
 	}
 
 	klog.Info("Setting up event handlers")
-	// Set up an event handler for when MPIJob resources change.
+	// Set up an event handler for when ResilientJob resources change.
 	mpiJobInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.filterMPIJob,
+		FilterFunc: controller.filterResilientJob,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.addMPIJob,
+			AddFunc: controller.addResilientJob,
 			UpdateFunc: func(old, new interface{}) {
-				controller.enqueueMPIJob(new)
+				controller.enqueueResilientJob(new)
 			},
-			DeleteFunc: controller.deleteMPIJob,
+			DeleteFunc: controller.deleteResilientJob,
 		},
 	})
 
@@ -158,7 +158,7 @@ func (c *HeterJobController) Run(threadiness int, stopCh <-chan struct{}) error 
 	}
 
 	klog.Info("Starting workers")
-	// Launch workers to process MPIJob resources.
+	// Launch workers to process ResilientJob resources.
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -214,7 +214,7 @@ func (c *HeterJobController) processNextWorkItem() bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// MPIJob resource to be synced.
+		// ResilientJob resource to be synced.
 		if err := c.syncHandler(key); err != nil {
 			c.queue.AddRateLimited(key)
 			return fmt.Errorf("error syncing '%s': %s", key, err.Error())
@@ -235,7 +235,7 @@ func (c *HeterJobController) processNextWorkItem() bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the MPIJob resource
+// converge the two. It then updates the Status block of the ResilientJob resource
 // with the current status of the resource.
 func (c *HeterJobController) syncHandler(key string) error {
 	startTime := c.clock.Now()
@@ -260,10 +260,10 @@ func (c *HeterJobController) syncHandler(key string) error {
 	return c.updateLauncherJobAnnotation(launcherJob, ipList)
 }
 
-func (c *HeterJobController) updateLauncherJobAnnotation(launcherJob *kubeflow.MPIJob, ipList string) error {
+func (c *HeterJobController) updateLauncherJobAnnotation(launcherJob *kubeflow.ResilientJob, ipList string) error {
 	if ipList != "" {
 		launcherJob.Annotations[heterIPListKey] = ipList
-		_, err := c.kubeflowClient.KubeflowV2beta1().MPIJobs(launcherJob.Namespace).Update(context.TODO(), launcherJob, metav1.UpdateOptions{})
+		_, err := c.kubeflowClient.KubeflowV2beta1().ResilientJobs(launcherJob.Namespace).Update(context.TODO(), launcherJob, metav1.UpdateOptions{})
 		if err != nil {
 			klog.Errorf("Update job %s failed, err: %v", launcherJob.Name, err)
 			return err
@@ -273,8 +273,8 @@ func (c *HeterJobController) updateLauncherJobAnnotation(launcherJob *kubeflow.M
 	return nil
 }
 
-func (c *HeterJobController) getJobPair(key string) (*kubeflow.MPIJob, *kubeflow.MPIJob) {
-	mpiJob, err := c.getMPIJobByKey(key)
+func (c *HeterJobController) getJobPair(key string) (*kubeflow.ResilientJob, *kubeflow.ResilientJob) {
+	mpiJob, err := c.getResilientJobByKey(key)
 	if err != nil {
 		return nil, nil
 	}
@@ -283,7 +283,7 @@ func (c *HeterJobController) getJobPair(key string) (*kubeflow.MPIJob, *kubeflow
 	if heterJobName == "" {
 		return nil, nil
 	}
-	heterJob, err := c.getMPIJobByKey(heterJobName)
+	heterJob, err := c.getResilientJobByKey(heterJobName)
 	if err != nil {
 		klog.Errorf("Get job %s failed", heterJobName)
 		return nil, nil
@@ -307,7 +307,7 @@ func (c *HeterJobController) getJobPair(key string) (*kubeflow.MPIJob, *kubeflow
 	}
 }
 
-func (c *HeterJobController) getMPIJobByKey(key string) (*kubeflow.MPIJob, error) {
+func (c *HeterJobController) getResilientJobByKey(key string) (*kubeflow.ResilientJob, error) {
 	// Convert the namespace/name string into a distinct namespace and name.
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -315,8 +315,8 @@ func (c *HeterJobController) getMPIJobByKey(key string) (*kubeflow.MPIJob, error
 		return nil, err
 	}
 
-	// Get the MPIJob with this namespace/name.
-	sharedJob, err := c.mpiJobLister.MPIJobs(namespace).Get(name)
+	// Get the ResilientJob with this namespace/name.
+	sharedJob, err := c.mpiJobLister.ResilientJobs(namespace).Get(name)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (c *HeterJobController) getMPIJobByKey(key string) (*kubeflow.MPIJob, error
 	return mpiJob, nil
 }
 
-func getStatusIPList(mpiJob *kubeflow.MPIJob) string {
+func getStatusIPList(mpiJob *kubeflow.ResilientJob) string {
 	if mpiJob.Status.ReplicaStatuses == nil {
 		return ""
 	}
@@ -361,8 +361,8 @@ func getStatusIPList(mpiJob *kubeflow.MPIJob) string {
 	return strings.TrimSuffix(ips.String(), ",")
 }
 
-func (c *HeterJobController) filterMPIJob(obj interface{}) bool {
-	mpiJob, ok := obj.(*kubeflow.MPIJob)
+func (c *HeterJobController) filterResilientJob(obj interface{}) bool {
+	mpiJob, ok := obj.(*kubeflow.ResilientJob)
 	if !ok {
 		return false
 	}
@@ -385,18 +385,18 @@ func (c *HeterJobController) filterObjNamespace(ns string) bool {
 }
 
 // When a mpiJob is added, set the defaults and enqueue the current mpiJob.
-func (c *HeterJobController) addMPIJob(obj interface{}) {
-	mpiJob := obj.(*kubeflow.MPIJob)
+func (c *HeterJobController) addResilientJob(obj interface{}) {
+	mpiJob := obj.(*kubeflow.ResilientJob)
 
 	// Set default for the new mpiJob.
 	scheme.Scheme.Default(mpiJob)
-	c.enqueueMPIJob(mpiJob)
+	c.enqueueResilientJob(mpiJob)
 }
 
-// enqueueMPIJob takes a MPIJob resource and converts it into a namespace/name
+// enqueueResilientJob takes a ResilientJob resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than MPIJob.
-func (c *HeterJobController) enqueueMPIJob(obj interface{}) {
+// passed resources of any type other than ResilientJob.
+func (c *HeterJobController) enqueueResilientJob(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -406,16 +406,16 @@ func (c *HeterJobController) enqueueMPIJob(obj interface{}) {
 	c.queue.AddRateLimited(key)
 }
 
-func (c *HeterJobController) deleteMPIJob(obj interface{}) {
-	var mpiJob *kubeflow.MPIJob
+func (c *HeterJobController) deleteResilientJob(obj interface{}) {
+	var mpiJob *kubeflow.ResilientJob
 	var ok bool
-	if mpiJob, ok = obj.(*kubeflow.MPIJob); !ok {
+	if mpiJob, ok = obj.(*kubeflow.ResilientJob); !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			runtime.HandleError(fmt.Errorf("error decoding object, invalid type"))
 			return
 		}
-		mpiJob, ok = tombstone.Obj.(*kubeflow.MPIJob)
+		mpiJob, ok = tombstone.Obj.(*kubeflow.ResilientJob)
 		if !ok {
 			runtime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 			return
@@ -425,13 +425,13 @@ func (c *HeterJobController) deleteMPIJob(obj interface{}) {
 
 	key := fmt.Sprintf("%s/%s", mpiJob.Namespace, mpiJob.Name)
 
-	klog.Infof("Processing delete mpijob: %s", key)
+	klog.Infof("Processing delete resilientjob: %s", key)
 
 	heterJobName := getAnnotation(mpiJob, heterJobKey)
 	if heterJobName == "" {
 		return
 	}
-	heterJob, err := c.getMPIJobByKey(heterJobName)
+	heterJob, err := c.getResilientJobByKey(heterJobName)
 	if err != nil {
 		klog.Errorf("Get job %s failed", heterJobName)
 		return
@@ -448,8 +448,8 @@ func (c *HeterJobController) deleteMPIJob(obj interface{}) {
 	}
 
 	klog.Infof("Delete job %s by %s", heterJobName, key)
-	if err = c.kubeflowClient.KubeflowV2beta1().MPIJobs(heterJob.Namespace).Delete(context.TODO(), heterJob.Name, metav1.DeleteOptions{}); err != nil {
-		klog.Errorf("Delete mpijob %s failed", heterJobName)
+	if err = c.kubeflowClient.KubeflowV2beta1().ResilientJobs(heterJob.Namespace).Delete(context.TODO(), heterJob.Name, metav1.DeleteOptions{}); err != nil {
+		klog.Errorf("Delete resilientjob %s failed", heterJobName)
 		return
 	}
 }

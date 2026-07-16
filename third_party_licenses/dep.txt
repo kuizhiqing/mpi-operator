@@ -1,4 +1,4 @@
-github.com/kubeflow/mpi-operator
+github.com/kuizhiqing/resilient-training-operator
 bitbucket.org/bertimus9/systemstat
 cloud.google.com/go
 dmitri.shuralyov.com/app/changes

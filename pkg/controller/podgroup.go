@@ -35,8 +35,8 @@ import (
 	volcanoinformers "volcano.sh/apis/pkg/client/informers/externalversions"
 	volcanopodgroupinformer "volcano.sh/apis/pkg/client/informers/externalversions/scheduling/v1beta1"
 
-	"github.com/kubeflow/mpi-operator/cmd/mpi-operator/app/options"
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	"github.com/kuizhiqing/resilient-training-operator/cmd/resilient-training-operator/app/options"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 )
 
 type PodGroupControl interface {
@@ -44,10 +44,10 @@ type PodGroupControl interface {
 	StartInformerFactory(stopCh <-chan struct{})
 	// PodGroupSharedIndexInformer will return Indexer based on SharedInformer for the podGroup.
 	PodGroupSharedIndexInformer() cache.SharedIndexInformer
-	// newPodGroup will generate a new podGroup for an MPIJob resource.
+	// newPodGroup will generate a new podGroup for an ResilientJob resource.
 	// It also sets the appropriate OwnerReferences on the resource so
-	// handleObject can discover the MPIJob resource that 'owns' it.
-	newPodGroup(mpiJob *kubeflow.MPIJob) metav1.Object
+	// handleObject can discover the ResilientJob resource that 'owns' it.
+	newPodGroup(mpiJob *kubeflow.ResilientJob) metav1.Object
 	// getPodGroup will return a podGroup.
 	getPodGroup(namespace, name string) (metav1.Object, error)
 	// createPodGroup will create  a podGroup.
@@ -59,7 +59,7 @@ type PodGroupControl interface {
 	// decoratePodTemplateSpec will decorate the podTemplate before it's used to generate a pod with information for gang-scheduling.
 	decoratePodTemplateSpec(pts *corev1.PodTemplateSpec, mpiJobName string)
 	// calculatePGMinResources will calculate minResources for podGroup.
-	calculatePGMinResources(minMember *int32, mpiJob *kubeflow.MPIJob) *corev1.ResourceList
+	calculatePGMinResources(minMember *int32, mpiJob *kubeflow.ResilientJob) *corev1.ResourceList
 	// pgSpecsAreEqual will return true if the spec fields of two podGroup are equals.
 	pgSpecsAreEqual(a, b metav1.Object) bool
 }
@@ -96,7 +96,7 @@ func (v *VolcanoCtrl) StartInformerFactory(stopCh <-chan struct{}) {
 	go v.InformerFactory.Start(stopCh)
 }
 
-// newPodGroup will generate a new PodGroup for an MPIJob resource.
+// newPodGroup will generate a new PodGroup for an ResilientJob resource.
 // If the parameters set in the schedulingPolicy aren't empty, it will pass them to a new PodGroup;
 // if they are empty, it will set the default values in the following:
 //
@@ -106,7 +106,7 @@ func (v *VolcanoCtrl) StartInformerFactory(stopCh <-chan struct{}) {
 //	minResources: nil
 //
 // However, it doesn't pass the ".schedulingPolicy.scheduleTimeoutSeconds" to the podGroup resource.
-func (v *VolcanoCtrl) newPodGroup(mpiJob *kubeflow.MPIJob) metav1.Object {
+func (v *VolcanoCtrl) newPodGroup(mpiJob *kubeflow.ResilientJob) metav1.Object {
 	if mpiJob == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func (v *VolcanoCtrl) decoratePodTemplateSpec(pts *corev1.PodTemplateSpec, mpiJo
 // PodGroup's MinResources leaves empty now if it is not set. So we calculate the minResources among those first minMember replicas with higher priority.
 // ret: https://github.com/volcano-sh/volcano/blob/1933d46bdc4434772518ebb74c4281671ddeffa1/pkg/webhooks/admission/jobs/mutate/mutate_job.go#L168
 // ref: https://github.com/volcano-sh/volcano/blob/1933d46bdc4434772518ebb74c4281671ddeffa1/pkg/controllers/job/job_controller_actions.go#L761
-func (v *VolcanoCtrl) calculatePGMinResources(minMember *int32, mpiJob *kubeflow.MPIJob) *corev1.ResourceList {
+func (v *VolcanoCtrl) calculatePGMinResources(minMember *int32, mpiJob *kubeflow.ResilientJob) *corev1.ResourceList {
 	if schedPolicy := mpiJob.Spec.RunPolicy.SchedulingPolicy; schedPolicy != nil && schedPolicy.MinResources != nil {
 		return schedPolicy.MinResources
 	}
@@ -229,7 +229,7 @@ func (s *SchedulerPluginsCtrl) StartInformerFactory(stopCh <-chan struct{}) {
 	go s.InformerFactory.Start(stopCh)
 }
 
-// newPodGroup will generate a new PodGroup for an MPIJob resource.
+// newPodGroup will generate a new PodGroup for an ResilientJob resource.
 // If the parameters set in the schedulingPolicy aren't empty, it will pass them to a new PodGroup;
 // if they are empty, it will set the default values in the following:
 //
@@ -238,7 +238,7 @@ func (s *SchedulerPluginsCtrl) StartInformerFactory(stopCh <-chan struct{}) {
 //	minResources: Follows the result of calculatePGMinResources.
 //
 // However, it doesn't pass the ".schedulingPolicy.priorityClass" and "schedulingPolicy.queue" to the podGroup resource.
-func (s *SchedulerPluginsCtrl) newPodGroup(mpiJob *kubeflow.MPIJob) metav1.Object {
+func (s *SchedulerPluginsCtrl) newPodGroup(mpiJob *kubeflow.ResilientJob) metav1.Object {
 	if mpiJob == nil {
 		return nil
 	}
@@ -314,7 +314,7 @@ func (s *SchedulerPluginsCtrl) decoratePodTemplateSpec(pts *corev1.PodTemplateSp
 // the coscheduling plugin can filter out the pods that belong to the podGroup in PreFilter
 // if the cluster doesn't have enough resources.
 // ref: https://github.com/kubernetes-sigs/scheduler-plugins/blob/93d7c92851c4a17f110907f3b5be873176628441/pkg/coscheduling/core/core.go#L159-L182
-func (s *SchedulerPluginsCtrl) calculatePGMinResources(minMember *int32, mpiJob *kubeflow.MPIJob) *corev1.ResourceList {
+func (s *SchedulerPluginsCtrl) calculatePGMinResources(minMember *int32, mpiJob *kubeflow.ResilientJob) *corev1.ResourceList {
 	if schedPolicy := mpiJob.Spec.RunPolicy.SchedulingPolicy; schedPolicy != nil && schedPolicy.MinResources != nil {
 		return schedPolicy.MinResources
 	}
@@ -334,7 +334,7 @@ func (s *SchedulerPluginsCtrl) pgSpecsAreEqual(a, b metav1.Object) bool {
 var _ PodGroupControl = &SchedulerPluginsCtrl{}
 
 // calPGMinResource returns the minimum resource for mpiJob with minMembers
-func calPGMinResource(minMember *int32, mpiJob *kubeflow.MPIJob, pcLister schedulinglisters.PriorityClassLister) *corev1.ResourceList {
+func calPGMinResource(minMember *int32, mpiJob *kubeflow.ResilientJob, pcLister schedulinglisters.PriorityClassLister) *corev1.ResourceList {
 	var order replicasOrder
 	for rt, replica := range mpiJob.Spec.MPIReplicaSpecs {
 		rp := replicaPriority{
@@ -391,7 +391,7 @@ func calPGMinResource(minMember *int32, mpiJob *kubeflow.MPIJob, pcLister schedu
 
 // calculateMinAvailable calculates minAvailable for the PodGroup.
 // If the schedulingPolicy.minAvailable is nil, it returns returns `NUM(workers) + 1`; otherwise returns `schedulingPolicy.minAvailable`.
-func calculateMinAvailable(mpiJob *kubeflow.MPIJob) *int32 {
+func calculateMinAvailable(mpiJob *kubeflow.ResilientJob) *int32 {
 	if schedulingPolicy := mpiJob.Spec.RunPolicy.SchedulingPolicy; schedulingPolicy != nil && schedulingPolicy.MinAvailable != nil {
 		return schedulingPolicy.MinAvailable
 	}

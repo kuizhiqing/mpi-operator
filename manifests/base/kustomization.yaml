@@ -4,15 +4,15 @@ namespace: kubeflow
 resources:
 - cluster-role-binding.yaml
 - cluster-role.yaml
-- kubeflow.org_mpijobs.yaml
+- kubeflow.org_resilientjobs.yaml
 - deployment.yaml
 - service-account.yaml
 commonLabels:
-  kustomize.component: mpi-operator
-  app: mpi-operator
-  app.kubernetes.io/name: mpi-operator
-  app.kubernetes.io/component: mpijob
+  kustomize.component: resilient-training-operator
+  app: resilient-training-operator
+  app.kubernetes.io/name: resilient-training-operator
+  app.kubernetes.io/component: resilientjob
 images:
-- name: mpioperator/mpi-operator
-  newName: mpioperator/mpi-operator
+- name: kuizhiqing/resilient-training-operator
+  newName: kuizhiqing/resilient-training-operator
   newTag: latest

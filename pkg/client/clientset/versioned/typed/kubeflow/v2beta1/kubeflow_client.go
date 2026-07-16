@@ -19,14 +19,14 @@ package v2beta1
 import (
 	"net/http"
 
-	v2beta1 "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
+	v2beta1 "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
 type KubeflowV2beta1Interface interface {
 	RESTClient() rest.Interface
-	MPIJobsGetter
+	ResilientJobsGetter
 }
 
 // KubeflowV2beta1Client is used to interact with features provided by the kubeflow.org group.
@@ -34,8 +34,8 @@ type KubeflowV2beta1Client struct {
 	restClient rest.Interface
 }
 
-func (c *KubeflowV2beta1Client) MPIJobs(namespace string) MPIJobInterface {
-	return newMPIJobs(c, namespace)
+func (c *KubeflowV2beta1Client) ResilientJobs(namespace string) ResilientJobInterface {
+	return newResilientJobs(c, namespace)
 }
 
 // NewForConfig creates a new KubeflowV2beta1Client for the given config.

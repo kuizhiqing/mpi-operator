@@ -1,6 +1,6 @@
-# Adopters of MPI Operator
+# Adopters of Resilient Training Operator
 
-This page contains a list of organizations who are using MPI Operator. If you'd like to be included here, please send a pull request which modifies this file. Please keep the list in alphabetical order.
+This page contains a list of organizations who are using Resilient Training Operator. If you'd like to be included here, please send a pull request which modifies this file. Please keep the list in alphabetical order.
 
 | Organization | Contact |
 | ------------ | ------- |

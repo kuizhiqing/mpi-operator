@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +17,7 @@ import (
 const hostListKey = "kubeflow.org/host-list"
 
 // get hostlist from annotation
-func getHostListFromAnnotation(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType) []string {
+func getHostListFromAnnotation(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType) []string {
 	hosts := getFullHostListFromAnnotation(mpiJob)
 	ret := []string{}
 	for _, h := range hosts {
@@ -28,7 +28,7 @@ func getHostListFromAnnotation(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplic
 	return ret
 }
 
-func getFullHostListFromAnnotation(mpiJob *kubeflow.MPIJob) []string {
+func getFullHostListFromAnnotation(mpiJob *kubeflow.ResilientJob) []string {
 	ann, ok := mpiJob.Annotations[hostListKey]
 	if !ok {
 		return nil
@@ -43,7 +43,7 @@ func getFullHostListFromAnnotation(mpiJob *kubeflow.MPIJob) []string {
 	return hosts
 }
 
-func (c *MPIJobController) getOrCreateReplicasByNames(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType, podNames []string) ([]*corev1.Pod, error) {
+func (c *ResilientJobController) getOrCreateReplicasByNames(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType, podNames []string) ([]*corev1.Pod, error) {
 	// Create pods in the host list annotation.
 	for _, name := range podNames {
 		_, err := c.podLister.Pods(mpiJob.Namespace).Get(name)
@@ -55,9 +55,9 @@ func (c *MPIJobController) getOrCreateReplicasByNames(mpiJob *kubeflow.MPIJob, r
 			}
 			replicas := c.newReplicas(mpiJob, idx, rtype)
 			_, err = c.kubeClient.CoreV1().Pods(mpiJob.Namespace).Create(context.TODO(), replicas, metav1.CreateOptions{})
-			klog.Infof("MPIJob pod %s/%s created from annotation: %v", mpiJob.Namespace, name, err)
+			klog.Infof("ResilientJob pod %s/%s created from annotation: %v", mpiJob.Namespace, name, err)
 		} else if err != nil {
-			klog.Errorf("MPIJob %s/%s: get pod %s failed: %v", mpiJob.Namespace, mpiJob.Name, name, err)
+			klog.Errorf("ResilientJob %s/%s: get pod %s failed: %v", mpiJob.Namespace, mpiJob.Name, name, err)
 			return nil, err
 		}
 	}
@@ -82,7 +82,7 @@ func (c *MPIJobController) getOrCreateReplicasByNames(mpiJob *kubeflow.MPIJob, r
 			}
 		}
 		if !found {
-			klog.Infof("MPIJob %s/%s: deleting pod %s not in hostlist annotation", mpiJob.Namespace, mpiJob.Name, pod.Name)
+			klog.Infof("ResilientJob %s/%s: deleting pod %s not in hostlist annotation", mpiJob.Namespace, mpiJob.Name, pod.Name)
 			err = c.kubeClient.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 			if err != nil {
 				return nil, err
@@ -123,7 +123,7 @@ func getIndexByPodName(podName string) (int, error) {
 }
 
 // deletePodsFromAnnotation deletes pods from the host list annotation
-func (c *MPIJobController) deletePodsFromAnnotation(mpiJob *kubeflow.MPIJob, hosts []string) error {
+func (c *ResilientJobController) deletePodsFromAnnotation(mpiJob *kubeflow.ResilientJob, hosts []string) error {
 	for _, name := range hosts {
 		pod, err := c.podLister.Pods(mpiJob.Namespace).Get(name)
 		if errors.IsNotFound(err) {
@@ -163,11 +163,11 @@ func getPodFromListByName(podName string, launcher *corev1.Pod, workers []*corev
 	return nil
 }
 
-func updateHostfileFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.MPIJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod, hosts []string) {
+func updateHostfileFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.ResilientJob, launcher *corev1.Pod, workers []*corev1.Pod, horkers []*corev1.Pod, hosts []string) {
 	if !allContainerRunning(mpiJob, launcher, workers, horkers) {
 		return
 	}
-	klog.Infof("MPIJob %s/%s update hostfile from annotation: %v", mpiJob.Namespace, mpiJob.Name, hosts)
+	klog.Infof("ResilientJob %s/%s update hostfile from annotation: %v", mpiJob.Namespace, mpiJob.Name, hosts)
 
 	var hostfile bytes.Buffer
 	var ips bytes.Buffer
@@ -178,7 +178,7 @@ func updateHostfileFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.
 	for _, name := range hosts {
 		p := getPodFromListByName(name, launcher, workers, horkers)
 		if p == nil {
-			klog.Errorf("MPIJob %s/%s: pod %s not found in hosts", mpiJob.Namespace, mpiJob.Name, name)
+			klog.Errorf("ResilientJob %s/%s: pod %s not found in hosts", mpiJob.Namespace, mpiJob.Name, name)
 			return
 		}
 		hostfile.WriteString(fmt.Sprintf("%s slots=%d\n", p.Status.PodIP, slots))

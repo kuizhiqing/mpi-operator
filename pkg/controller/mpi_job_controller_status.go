@@ -18,26 +18,26 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 )
 
 const (
-	// mpiJobCreatedReason is added in a mpijob when it is created.
-	mpiJobCreatedReason = "MPIJobCreated"
-	// mpiJobSucceededReason is added in a mpijob when it is succeeded.
-	mpiJobSucceededReason = "MPIJobSucceeded"
-	// mpiJobRunningReason is added in a mpijob when it is running.
-	mpiJobRunningReason = "MPIJobRunning"
-	// mpiJobSuspendedReason is added in a mpijob when it is suspended.
-	mpiJobSuspendedReason = "MPIJobSuspended"
-	// mpiJobResumedReason is added in a mpijob when it is resumed.
-	mpiJobResumedReason = "MPIJobResumed"
-	// mpiJobFailedReason is added in a mpijob when it is failed.
-	mpiJobFailedReason = "MPIJobFailed"
+	// mpiJobCreatedReason is added in a resilientjob when it is created.
+	mpiJobCreatedReason = "ResilientJobCreated"
+	// mpiJobSucceededReason is added in a resilientjob when it is succeeded.
+	mpiJobSucceededReason = "ResilientJobSucceeded"
+	// mpiJobRunningReason is added in a resilientjob when it is running.
+	mpiJobRunningReason = "ResilientJobRunning"
+	// mpiJobSuspendedReason is added in a resilientjob when it is suspended.
+	mpiJobSuspendedReason = "ResilientJobSuspended"
+	// mpiJobResumedReason is added in a resilientjob when it is resumed.
+	mpiJobResumedReason = "ResilientJobResumed"
+	// mpiJobFailedReason is added in a resilientjob when it is failed.
+	mpiJobFailedReason = "ResilientJobFailed"
 )
 
-// initializeMPIJobStatuses initializes the ReplicaStatuses for MPIJob.
-func initializeMPIJobStatuses(mpiJob *kubeflow.MPIJob, mtype kubeflow.MPIReplicaType) {
+// initializeResilientJobStatuses initializes the ReplicaStatuses for ResilientJob.
+func initializeResilientJobStatuses(mpiJob *kubeflow.ResilientJob, mtype kubeflow.MPIReplicaType) {
 	if mpiJob.Status.ReplicaStatuses == nil {
 		mpiJob.Status.ReplicaStatuses = make(map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus)
 	}
@@ -45,8 +45,8 @@ func initializeMPIJobStatuses(mpiJob *kubeflow.MPIJob, mtype kubeflow.MPIReplica
 	mpiJob.Status.ReplicaStatuses[mtype] = &kubeflow.ReplicaStatus{}
 }
 
-// updateMPIJobConditions updates the conditions of the given mpiJob.
-func updateMPIJobConditions(mpiJob *kubeflow.MPIJob, conditionType kubeflow.JobConditionType, status corev1.ConditionStatus, reason, message string) bool {
+// updateResilientJobConditions updates the conditions of the given mpiJob.
+func updateResilientJobConditions(mpiJob *kubeflow.ResilientJob, conditionType kubeflow.JobConditionType, status corev1.ConditionStatus, reason, message string) bool {
 	condition := newCondition(conditionType, status, reason, message)
 	return setCondition(&mpiJob.Status, condition)
 }

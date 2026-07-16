@@ -32,7 +32,7 @@ import (
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
-	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
+	clientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
 )
 
 const (
@@ -46,7 +46,7 @@ const (
 	envSchedulerPluginsVersion = "SCHEDULER_PLUGINS_VERSION"
 	envVolcanoSchedulerVersion = "VOLCANO_SCHEDULER_VERSION"
 
-	defaultMPIOperatorImage = "mpioperator/mpi-operator:local"
+	defaultMPIOperatorImage = "kuizhiqing/resilient-training-operator:local"
 	defaultKindImage        = "kindest/node:v1.25.8"
 	defaultOpenMPIImage     = "mpioperator/mpi-pi:openmpi"
 	defaultIntelMPIImage    = "mpioperator/mpi-pi:intel"
@@ -64,7 +64,7 @@ const (
 	defaultSchedulerPluginsVersion = "v0.25.7"
 	defaultVolcanoSchedulerVersion = "v1.7.0"
 
-	mpiOperator      = "mpi-operator"
+	mpiOperator      = "resilient-training-operator"
 	schedulerPlugins = "scheduler-plugins"
 
 	waitInterval   = 500 * time.Millisecond

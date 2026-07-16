@@ -23,7 +23,7 @@ import (
 	apimachineryvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 )
 
 var (
@@ -43,13 +43,13 @@ var (
 	)
 )
 
-func ValidateMPIJob(job *kubeflow.MPIJob) field.ErrorList {
-	errs := validateMPIJobName(job)
-	errs = append(errs, validateMPIJobSpec(&job.Spec, field.NewPath("spec"))...)
+func ValidateResilientJob(job *kubeflow.ResilientJob) field.ErrorList {
+	errs := validateResilientJobName(job)
+	errs = append(errs, validateResilientJobSpec(&job.Spec, field.NewPath("spec"))...)
 	return errs
 }
 
-func validateMPIJobName(job *kubeflow.MPIJob) field.ErrorList {
+func validateResilientJobName(job *kubeflow.ResilientJob) field.ErrorList {
 	var allErrs field.ErrorList
 	var replicas int32 = 1
 	if workerSpec := job.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker]; workerSpec != nil {
@@ -64,7 +64,7 @@ func validateMPIJobName(job *kubeflow.MPIJob) field.ErrorList {
 	return allErrs
 }
 
-func validateMPIJobSpec(spec *kubeflow.MPIJobSpec, path *field.Path) field.ErrorList {
+func validateResilientJobSpec(spec *kubeflow.ResilientJobSpec, path *field.Path) field.ErrorList {
 	errs := validateMPIReplicaSpecs(spec.MPIReplicaSpecs, path.Child("mpiReplicaSpecs"))
 	if spec.SlotsPerWorker == nil {
 		errs = append(errs, field.Required(path.Child("slotsPerWorker"), "must have number of slots per worker"))

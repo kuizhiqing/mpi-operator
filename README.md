@@ -1,9 +1,9 @@
-# MPI Operator
+# Resilient Training Operator
 
-[![Build Status](https://github.com/kubeflow/mpi-operator/workflows/build/badge.svg)](https://github.com/kubeflow/mpi-operator/actions?query=event%3Apush+branch%3Amaster)
-[![Docker Pulls](https://img.shields.io/docker/pulls/mpioperator/mpi-operator)](https://hub.docker.com/r/mpioperator/mpi-operator)
+[![Build Status](https://github.com/kuizhiqing/resilient-training-operator/workflows/build/badge.svg)](https://github.com/kuizhiqing/resilient-training-operator/actions?query=event%3Apush+branch%3Amaster)
+[![Docker Pulls](https://img.shields.io/docker/pulls/kuizhiqing/resilient-training-operator)](https://hub.docker.com/r/kuizhiqing/resilient-training-operator)
 
-The MPI Operator makes it easy to run allreduce-style distributed training on Kubernetes. Please check out [this blog post](https://medium.com/kubeflow/introduction-to-kubeflow-mpi-operator-and-industry-adoption-296d5f2e6edc) for an introduction to MPI Operator and its industry adoption.
+The Resilient Training Operator makes it easy to run allreduce-style distributed training on Kubernetes. It extends the upstream Kubeflow MPI Operator (see [this introductory blog post](https://medium.com/kubeflow/introduction-to-kubeflow-mpi-operator-and-industry-adoption-296d5f2e6edc)) with heterogeneous workers and fault-tolerant, elastic, auto-recovery training.
 
 ## Installation
 
@@ -12,13 +12,13 @@ You can deploy the operator with default settings by running the following comma
 - Latest Development Version
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/kubeflow/mpi-operator/master/deploy/v2beta1/mpi-operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/kuizhiqing/resilient-training-operator/master/deploy/v2beta1/resilient-training-operator.yaml
 ```
 
 - Release Version
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/kubeflow/mpi-operator/v0.4.0/deploy/v2beta1/mpi-operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/kuizhiqing/resilient-training-operator/v0.4.0/deploy/v2beta1/resilient-training-operator.yaml
 ```
 
 Alternatively, follow the [getting started guide](https://www.kubeflow.org/docs/started/getting-started/) to deploy Kubeflow.
@@ -31,20 +31,20 @@ You can check whether the MPI Job custom resource is installed via:
 kubectl get crd
 ```
 
-The output should include `mpijobs.kubeflow.org` like the following:
+The output should include `resilientjobs.kubeflow.org` like the following:
 
 ```
 NAME                                       AGE
 ...
-mpijobs.kubeflow.org                       4d
+resilientjobs.kubeflow.org                       4d
 ...
 ```
 
 If it is not included, you can add it as follows using [kustomize](https://github.com/kubernetes-sigs/kustomize):
 
 ```bash
-git clone https://github.com/kubeflow/mpi-operator
-cd mpi-operator
+git clone https://github.com/kuizhiqing/resilient-training-operator
+cd resilient-training-operator
 kustomize build manifests/overlays/kubeflow | kubectl apply -f -
 ```
 
@@ -62,13 +62,13 @@ kubectl kustomize base | kubectl apply -f -
 
 ## Creating an MPI Job
 
-You can create an MPI job by defining an `MPIJob` config file. See [TensorFlow benchmark example](examples/v2beta1/tensorflow-benchmarks/tensorflow-benchmarks.yaml) config file for launching a multi-node TensorFlow benchmark training job. You may change the config file based on your requirements.
+You can create an MPI job by defining an `ResilientJob` config file. See [TensorFlow benchmark example](examples/v2beta1/tensorflow-benchmarks/tensorflow-benchmarks.yaml) config file for launching a multi-node TensorFlow benchmark training job. You may change the config file based on your requirements.
 
 ```
 cat examples/v2beta1/tensorflow-benchmarks/tensorflow-benchmarks.yaml
 ```
 
-Deploy the `MPIJob` resource to start training:
+Deploy the `ResilientJob` resource to start training:
 
 ```
 kubectl apply -f examples/v2beta1/tensorflow-benchmarks/tensorflow-benchmarks.yaml
@@ -76,22 +76,22 @@ kubectl apply -f examples/v2beta1/tensorflow-benchmarks/tensorflow-benchmarks.ya
 
 ## Monitoring an MPI Job
 
-Once the `MPIJob` resource is created, you should now be able to see the created pods matching the specified number of GPUs. You can also monitor the job status from the status section. Here is sample output when the job is successfully completed.
+Once the `ResilientJob` resource is created, you should now be able to see the created pods matching the specified number of GPUs. You can also monitor the job status from the status section. Here is sample output when the job is successfully completed.
 
 ```
-kubectl get -o yaml mpijobs tensorflow-benchmarks
+kubectl get -o yaml resilientjobs tensorflow-benchmarks
 ```
 
 ```
 apiVersion: kubeflow.org/v2beta1
-kind: MPIJob
+kind: ResilientJob
 metadata:
   creationTimestamp: "2019-07-09T22:15:51Z"
   generation: 1
   name: tensorflow-benchmarks
   namespace: default
   resourceVersion: "5645868"
-  selfLink: /apis/kubeflow.org/v1alpha2/namespaces/default/mpijobs/tensorflow-benchmarks
+  selfLink: /apis/kubeflow.org/v1alpha2/namespaces/default/resilientjobs/tensorflow-benchmarks
   uid: 1c5b470f-a297-11e9-964d-88d7f67c6e6d
 spec:
   runPolicy:
@@ -146,20 +146,20 @@ status:
   conditions:
   - lastTransitionTime: "2019-07-09T22:15:51Z"
     lastUpdateTime: "2019-07-09T22:15:51Z"
-    message: MPIJob default/tensorflow-benchmarks is created.
-    reason: MPIJobCreated
+    message: ResilientJob default/tensorflow-benchmarks is created.
+    reason: ResilientJobCreated
     status: "True"
     type: Created
   - lastTransitionTime: "2019-07-09T22:15:54Z"
     lastUpdateTime: "2019-07-09T22:15:54Z"
-    message: MPIJob default/tensorflow-benchmarks is running.
-    reason: MPIJobRunning
+    message: ResilientJob default/tensorflow-benchmarks is running.
+    reason: ResilientJobRunning
     status: "False"
     type: Running
   - lastTransitionTime: "2019-07-09T22:17:06Z"
     lastUpdateTime: "2019-07-09T22:17:06Z"
-    message: MPIJob default/tensorflow-benchmarks successfully completed.
-    reason: MPIJobSucceeded
+    message: ResilientJob default/tensorflow-benchmarks successfully completed.
+    reason: ResilientJobSucceeded
     status: "True"
     type: Succeeded
   replicaStatuses:
@@ -231,7 +231,7 @@ cat examples/pi/pi-mpich.yaml
 |mpi\_operator\_jobs\_created\_total | Counter  | Counts number of MPI jobs created | |
 |mpi\_operator\_jobs\_successful\_total | Counter  | Counts number of MPI jobs successful | |
 |mpi\_operator\_jobs\_failed\_total | Counter  | Counts number of MPI jobs failed| |
-|mpi\_operator\_job\_info | Gauge | Information about MPIJob | `launcher`=&lt;launcher-pod-name&gt; <br> `namespace`=&lt;job-namespace&gt; |
+|mpi\_operator\_job\_info | Gauge | Information about ResilientJob | `launcher`=&lt;launcher-pod-name&gt; <br> `namespace`=&lt;job-namespace&gt; |
 
 ### Join Metrics
 
@@ -243,16 +243,16 @@ For example `kube_pod_info * on(pod,namespace) group_left label_replace(mpi_oper
 We push Docker images of [mpioperator on Dockerhub](https://hub.docker.com/u/mpioperator) for every release.
 You can use the following Dockerfile to build the image yourself:
 
-- [mpi-operator](https://github.com/kubeflow/mpi-operator/blob/master/Dockerfile)
+- [resilient-training-operator](https://github.com/kuizhiqing/resilient-training-operator/blob/master/Dockerfile)
 
 Alternative, you can build the image using make:
 
 ```bash
-make RELEASE_VERSION=dev IMAGE_NAME=registry.example.com/mpi-operator images
+make RELEASE_VERSION=dev IMAGE_NAME=registry.example.com/resilient-training-operator images
 ```
 
-This will produce an image with the tag `registry.example.com/mpi-operator:dev`.
+This will produce an image with the tag `registry.example.com/resilient-training-operator:dev`.
 
 ## Contributing
 
-Learn more in [CONTRIBUTING](https://github.com/kubeflow/mpi-operator/blob/master/CONTRIBUTING.md).
+Learn more in [CONTRIBUTING](https://github.com/kuizhiqing/resilient-training-operator/blob/master/CONTRIBUTING.md).

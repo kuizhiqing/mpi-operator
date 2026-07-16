@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -12,7 +12,7 @@ import (
 )
 
 // enableLauncherAsWorker check whether to run worker process in launcher pod
-func enableLauncherAsWorker(mpiJob *kubeflow.MPIJob) bool {
+func enableLauncherAsWorker(mpiJob *kubeflow.ResilientJob) bool {
 	if v, ok := mpiJob.Labels[launcherAsWorker]; ok {
 		if strings.ToLower(v) == "false" {
 			return false
@@ -26,18 +26,18 @@ func enableLauncherAsWorker(mpiJob *kubeflow.MPIJob) bool {
 	return true
 }
 
-func getAnnotation(mpiJob *kubeflow.MPIJob, key string) string {
+func getAnnotation(mpiJob *kubeflow.ResilientJob, key string) string {
 	if v, ok := mpiJob.Annotations[key]; ok {
 		return v
 	}
 	return ""
 }
 
-func hasLauncher(mpiJob *kubeflow.MPIJob) bool {
+func hasLauncher(mpiJob *kubeflow.ResilientJob) bool {
 	return !noLauncher(mpiJob)
 }
 
-func noLauncher(mpiJob *kubeflow.MPIJob) bool {
+func noLauncher(mpiJob *kubeflow.ResilientJob) bool {
 	launcher := mpiJob.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeLauncher]
 	if launcher == nil || *launcher.Replicas == 0 {
 		return true
@@ -45,7 +45,7 @@ func noLauncher(mpiJob *kubeflow.MPIJob) bool {
 	return false
 }
 
-func elasticEnabled(mpiJob *kubeflow.MPIJob) bool {
+func elasticEnabled(mpiJob *kubeflow.ResilientJob) bool {
 	if elastic, ok := mpiJob.Labels[elasticLableName]; ok {
 		if strings.ToLower(elastic) == "false" {
 			return false
@@ -59,12 +59,12 @@ func elasticEnabled(mpiJob *kubeflow.MPIJob) bool {
 	return true
 }
 
-// isFrozen reports whether the MPIJob is marked as frozen via the
+// isFrozen reports whether the ResilientJob is marked as frozen via the
 // `kubeflow.org/frozen=true` annotation. A frozen job is paused: the
 // controller skips status changes, failure checks, and pod
 // create/clean-up operations until the annotation is removed or set
 // back to "false".
-func isFrozen(mpiJob *kubeflow.MPIJob) bool {
+func isFrozen(mpiJob *kubeflow.ResilientJob) bool {
 	if v, ok := mpiJob.Annotations[frozenAnnotation]; ok {
 		if strings.ToLower(v) == "true" {
 			return true
@@ -73,7 +73,7 @@ func isFrozen(mpiJob *kubeflow.MPIJob) bool {
 	return false
 }
 
-func newJobService(job *kubeflow.MPIJob) *corev1.Service {
+func newJobService(job *kubeflow.ResilientJob) *corev1.Service {
 	labels := map[string]string{
 		kubeflow.OperatorNameLabel: kubeflow.OperatorName,
 		kubeflow.JobNameLabel:      job.Name,
@@ -81,7 +81,7 @@ func newJobService(job *kubeflow.MPIJob) *corev1.Service {
 	return newService(job, job.Name, labels)
 }
 
-func newService(job *kubeflow.MPIJob, name string, selector map[string]string) *corev1.Service {
+func newService(job *kubeflow.ResilientJob, name string, selector map[string]string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -100,7 +100,7 @@ func newService(job *kubeflow.MPIJob, name string, selector map[string]string) *
 	}
 }
 
-func replicasName(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaType) string {
+func replicasName(mpiJob *kubeflow.ResilientJob, index int, rtype kubeflow.MPIReplicaType) string {
 	if rtype == kubeflow.MPIReplicaTypeWorker {
 		return workerName(mpiJob, index)
 	} else if rtype == kubeflow.MPIReplicaTypeHorker {
@@ -110,19 +110,19 @@ func replicasName(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaT
 	}
 }
 
-func launcherName(mpiJob *kubeflow.MPIJob) string {
+func launcherName(mpiJob *kubeflow.ResilientJob) string {
 	return fmt.Sprintf("%s-%s", mpiJob.Name, launcher)
 }
 
-func workerName(mpiJob *kubeflow.MPIJob, index int) string {
+func workerName(mpiJob *kubeflow.ResilientJob, index int) string {
 	return fmt.Sprintf("%s-%s-%d", mpiJob.Name, worker, index)
 }
 
-func horkerName(mpiJob *kubeflow.MPIJob, index int) string {
+func horkerName(mpiJob *kubeflow.ResilientJob, index int) string {
 	return fmt.Sprintf("%s-%s-%d", mpiJob.Name, horker, index)
 }
 
-func replicasService(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaType) string {
+func replicasService(mpiJob *kubeflow.ResilientJob, index int, rtype kubeflow.MPIReplicaType) string {
 	if rtype == kubeflow.MPIReplicaTypeWorker {
 		return workerService(mpiJob, index)
 	} else if rtype == kubeflow.MPIReplicaTypeHorker {
@@ -132,15 +132,15 @@ func replicasService(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIRepli
 	}
 }
 
-func launcherService(mpiJob *kubeflow.MPIJob) string {
+func launcherService(mpiJob *kubeflow.ResilientJob) string {
 	return fmt.Sprintf("%s.%s.%s", launcherName(mpiJob), mpiJob.Name, mpiJob.Namespace)
 }
 
-func workerService(mpiJob *kubeflow.MPIJob, index int) string {
+func workerService(mpiJob *kubeflow.ResilientJob, index int) string {
 	return fmt.Sprintf("%s.%s.%s", workerName(mpiJob, index), mpiJob.Name, mpiJob.Namespace)
 }
 
-func horkerService(mpiJob *kubeflow.MPIJob, index int) string {
+func horkerService(mpiJob *kubeflow.ResilientJob, index int) string {
 	return fmt.Sprintf("%s.%s.%s", horkerName(mpiJob, index), mpiJob.Name, mpiJob.Namespace)
 }
 
@@ -153,7 +153,7 @@ func hasEnv(envs []corev1.EnvVar, key string) (bool, string) {
 	return false, ""
 }
 
-func getReplicasEnv(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType, key string) (bool, string) {
+func getReplicasEnv(mpiJob *kubeflow.ResilientJob, rtype kubeflow.MPIReplicaType, key string) (bool, string) {
 	spec := mpiJob.Spec.MPIReplicaSpecs[rtype]
 	if spec != nil && len(spec.Template.Spec.Containers) > 0 {
 		container := spec.Template.Spec.Containers[0]
@@ -162,7 +162,7 @@ func getReplicasEnv(mpiJob *kubeflow.MPIJob, rtype kubeflow.MPIReplicaType, key 
 	return false, ""
 }
 
-func getJobEnv(mpiJob *kubeflow.MPIJob, key string) (bool, string) {
+func getJobEnv(mpiJob *kubeflow.ResilientJob, key string) (bool, string) {
 	if ok, v := getReplicasEnv(mpiJob, kubeflow.MPIReplicaTypeLauncher, key); ok {
 		return ok, v
 	}
@@ -175,7 +175,7 @@ func getJobEnv(mpiJob *kubeflow.MPIJob, key string) (bool, string) {
 	return false, ""
 }
 
-func getAbsIndex(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaType) int {
+func getAbsIndex(mpiJob *kubeflow.ResilientJob, index int, rtype kubeflow.MPIReplicaType) int {
 	if rtype == kubeflow.MPIReplicaTypeLauncher {
 		return 0
 	}
@@ -192,7 +192,7 @@ func getAbsIndex(mpiJob *kubeflow.MPIJob, index int, rtype kubeflow.MPIReplicaTy
 	}
 }
 
-func workerReplicas(job *kubeflow.MPIJob) int32 {
+func workerReplicas(job *kubeflow.ResilientJob) int32 {
 	workerSpec := job.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeWorker]
 	if workerSpec != nil && workerSpec.Replicas != nil {
 		return *workerSpec.Replicas
@@ -200,7 +200,7 @@ func workerReplicas(job *kubeflow.MPIJob) int32 {
 	return 0
 }
 
-func horkerReplicas(job *kubeflow.MPIJob) int32 {
+func horkerReplicas(job *kubeflow.ResilientJob) int32 {
 	workerSpec := job.Spec.MPIReplicaSpecs[kubeflow.MPIReplicaTypeHorker]
 	if workerSpec != nil && workerSpec.Replicas != nil {
 		return *workerSpec.Replicas

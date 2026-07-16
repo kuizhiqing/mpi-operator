@@ -1,8 +1,8 @@
 {
   "swagger": "2.0",
   "info": {
-    "description": "Python SDK for MPI-Operator",
-    "title": "mpijob",
+    "description": "Python SDK for Resilient Training Operator",
+    "title": "resilientjob",
     "version": "v2beta1"
   },
   "paths": {},
@@ -82,7 +82,7 @@
         }
       }
     },
-    "v2beta1.MPIJob": {
+    "v2beta1.ResilientJob": {
       "type": "object",
       "properties": {
         "apiVersion": {
@@ -99,7 +99,7 @@
         },
         "spec": {
           "default": {},
-          "$ref": "#/definitions/v2beta1.MPIJobSpec"
+          "$ref": "#/definitions/v2beta1.ResilientJobSpec"
         },
         "status": {
           "default": {},
@@ -107,7 +107,7 @@
         }
       }
     },
-    "v2beta1.MPIJobList": {
+    "v2beta1.ResilientJobList": {
       "type": "object",
       "required": [
         "metadata",
@@ -122,7 +122,7 @@
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v2beta1.MPIJob"
+            "$ref": "#/definitions/v2beta1.ResilientJob"
           }
         },
         "kind": {
@@ -135,7 +135,7 @@
         }
       }
     },
-    "v2beta1.MPIJobSpec": {
+    "v2beta1.ResilientJobSpec": {
       "type": "object",
       "required": [
         "mpiReplicaSpecs"
@@ -244,7 +244,7 @@
           "$ref": "#/definitions/v2beta1.SchedulingPolicy"
         },
         "suspend": {
-          "description": "suspend specifies whether the MPIJob controller should create Pods or not. If a MPIJob is created with suspend set to true, no Pods are created by the MPIJob controller. If a MPIJob is suspended after creation (i.e. the flag goes from false to true), the MPIJob controller will delete all active Pods and PodGroups associated with this MPIJob. Also, it will suspend the Launcher Job. Users must design their workload to gracefully handle this. Suspending a Job will reset the StartTime field of the MPIJob.\n\nDefaults to false.",
+          "description": "suspend specifies whether the ResilientJob controller should create Pods or not. If a ResilientJob is created with suspend set to true, no Pods are created by the ResilientJob controller. If a ResilientJob is suspended after creation (i.e. the flag goes from false to true), the ResilientJob controller will delete all active Pods and PodGroups associated with this ResilientJob. Also, it will suspend the Launcher Job. Users must design their workload to gracefully handle this. Suspending a Job will reset the StartTime field of the ResilientJob.\n\nDefaults to false.",
           "type": "boolean"
         },
         "ttlSecondsAfterFinished": {

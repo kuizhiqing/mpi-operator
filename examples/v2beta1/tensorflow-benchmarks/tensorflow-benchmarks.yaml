@@ -1,5 +1,5 @@
 apiVersion: kubeflow.org/v2beta1
-kind: MPIJob
+kind: ResilientJob
 metadata:
   name: tensorflow-benchmarks
 spec:

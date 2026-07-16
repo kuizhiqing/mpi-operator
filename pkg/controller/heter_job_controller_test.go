@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
-	clientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
-	"github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/fake"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
+	clientset "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned"
+	"github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/fake"
+	informers "github.com/kuizhiqing/resilient-training-operator/pkg/client/informers/externalversions"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,10 +26,10 @@ func newHeterJobController(
 	resyncPeriod time.Duration) (*HeterJobController, informers.SharedInformerFactory) {
 
 	informerFactory := informers.NewSharedInformerFactory(kubeflowClient, resyncPeriod)
-	jobInformer := informerFactory.Kubeflow().V2beta1().MPIJobs()
+	jobInformer := informerFactory.Kubeflow().V2beta1().ResilientJobs()
 
 	eventBroadcaster := record.NewBroadcaster()
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "mpi-operator"})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "resilient-training-operator"})
 
 	hjc := NewHeterJobControllerWithClock(
 		kubeClient,
@@ -37,7 +37,7 @@ func newHeterJobController(
 		jobInformer,
 		&clock.RealClock{},
 		"test-namespace",
-		"test-mpi-operator",
+		"test-resilient-training-operator",
 		"/etc/config/ssh",
 	)
 	hjc.recorder = recorder
@@ -58,14 +58,14 @@ func TestNewHeterJobController(t *testing.T) {
 	assert.NotNil(t, controller.recorder)
 }
 
-func TestAddMPIJob(t *testing.T) {
+func TestAddResilientJob(t *testing.T) {
 	kubeClient := kubefake.NewSimpleClientset()
 	kubeflowClient := fake.NewSimpleClientset()
 
 	controller, _ := newHeterJobController(kubeClient, kubeflowClient, 0)
 
 	// Create a test job
-	testJob := &kubeflow.MPIJob{
+	testJob := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
@@ -73,7 +73,7 @@ func TestAddMPIJob(t *testing.T) {
 	}
 
 	// Test adding job
-	controller.addMPIJob(testJob)
+	controller.addResilientJob(testJob)
 
 	// Verify item was added to work queue
 	item, shutdown := controller.queue.Get()
@@ -91,12 +91,12 @@ func TestProcessNextItem(t *testing.T) {
 	controller, informerFactory := newHeterJobController(kubeClient, kubeflowClient, 0)
 
 	// Create and add test job
-	testJob := &kubeflow.MPIJob{
+	testJob := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
 		},
-		Spec: kubeflow.MPIJobSpec{
+		Spec: kubeflow.ResilientJobSpec{
 			MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 				kubeflow.MPIReplicaTypeLauncher: {
 					Replicas: int32Ptr(1),
@@ -108,11 +108,11 @@ func TestProcessNextItem(t *testing.T) {
 		},
 	}
 
-	err := informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().GetIndexer().Add(testJob)
+	err := informerFactory.Kubeflow().V2beta1().ResilientJobs().Informer().GetIndexer().Add(testJob)
 	assert.NoError(t, err)
 
 	// Add job to work queue
-	controller.addMPIJob(testJob)
+	controller.addResilientJob(testJob)
 
 	// Process item
 	forget := controller.processNextWorkItem()
@@ -125,13 +125,13 @@ func int32Ptr(i int32) *int32 {
 
 func TestGetJobPair(t *testing.T) {
 	testCases := map[string]struct {
-		launcherJob *kubeflow.MPIJob
-		heterJob    *kubeflow.MPIJob
+		launcherJob *kubeflow.ResilientJob
+		heterJob    *kubeflow.ResilientJob
 		key         string
 		expectBoth  bool
 	}{
 		"valid launcher and heter job": {
-			launcherJob: &kubeflow.MPIJob{
+			launcherJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "launcher-job",
 					Namespace: "default",
@@ -141,7 +141,7 @@ func TestGetJobPair(t *testing.T) {
 					},
 				},
 			},
-			heterJob: &kubeflow.MPIJob{
+			heterJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "heter-job",
 					Namespace: "default",
@@ -155,7 +155,7 @@ func TestGetJobPair(t *testing.T) {
 			expectBoth: true,
 		},
 		"missing annotation": {
-			launcherJob: &kubeflow.MPIJob{
+			launcherJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "launcher-job",
 					Namespace: "default",
@@ -182,8 +182,8 @@ func TestGetJobPair(t *testing.T) {
 
 			// Add jobs to informer cache
 			for _, obj := range objects {
-				if job, ok := obj.(*kubeflow.MPIJob); ok {
-					err := informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().GetIndexer().Add(job)
+				if job, ok := obj.(*kubeflow.ResilientJob); ok {
+					err := informerFactory.Kubeflow().V2beta1().ResilientJobs().Informer().GetIndexer().Add(job)
 					assert.NoError(t, err)
 				}
 			}
@@ -202,15 +202,15 @@ func TestGetJobPair(t *testing.T) {
 	}
 }
 
-func TestGetMPIJobByKey(t *testing.T) {
+func TestGetResilientJobByKey(t *testing.T) {
 	testCases := map[string]struct {
-		job          *kubeflow.MPIJob
+		job          *kubeflow.ResilientJob
 		key          string
 		expectError  bool
 		expectNilJob bool
 	}{
 		"valid job": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -246,11 +246,11 @@ func TestGetMPIJobByKey(t *testing.T) {
 			controller, informerFactory := newHeterJobController(kubeClient, kubeflowClient, 0)
 
 			if tc.job != nil {
-				err := informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().GetIndexer().Add(tc.job)
+				err := informerFactory.Kubeflow().V2beta1().ResilientJobs().Informer().GetIndexer().Add(tc.job)
 				assert.NoError(t, err)
 			}
 
-			job, err := controller.getMPIJobByKey(tc.key)
+			job, err := controller.getResilientJobByKey(tc.key)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
@@ -269,11 +269,11 @@ func TestGetMPIJobByKey(t *testing.T) {
 
 func TestGetStatusIPList(t *testing.T) {
 	testCases := map[string]struct {
-		job            *kubeflow.MPIJob
+		job            *kubeflow.ResilientJob
 		expectedIPList string
 	}{
 		"all roles with IPs": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				Status: kubeflow.JobStatus{
 					ReplicaStatuses: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 						kubeflow.MPIReplicaTypeLauncher: {
@@ -291,7 +291,7 @@ func TestGetStatusIPList(t *testing.T) {
 			expectedIPList: "192.168.1.1,192.168.1.2,192.168.1.3",
 		},
 		"partial roles with IPs": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				Status: kubeflow.JobStatus{
 					ReplicaStatuses: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaStatus{
 						kubeflow.MPIReplicaTypeLauncher: {
@@ -306,7 +306,7 @@ func TestGetStatusIPList(t *testing.T) {
 			expectedIPList: "192.168.1.1,192.168.1.2",
 		},
 		"no replica status": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				Status: kubeflow.JobStatus{},
 			},
 			expectedIPList: "",
@@ -321,15 +321,15 @@ func TestGetStatusIPList(t *testing.T) {
 	}
 }
 
-func TestDeleteMPIJob(t *testing.T) {
+func TestDeleteResilientJob(t *testing.T) {
 	testCases := map[string]struct {
 		obj           interface{}
-		heterJob      *kubeflow.MPIJob
+		heterJob      *kubeflow.ResilientJob
 		expectDelete  bool
 		expectedError bool
 	}{
 		"valid delete": {
-			obj: &kubeflow.MPIJob{
+			obj: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -338,7 +338,7 @@ func TestDeleteMPIJob(t *testing.T) {
 					},
 				},
 			},
-			heterJob: &kubeflow.MPIJob{
+			heterJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "heter-job",
 					Namespace: "default",
@@ -355,7 +355,7 @@ func TestDeleteMPIJob(t *testing.T) {
 			expectedError: true,
 		},
 		"job already terminating": {
-			obj: &kubeflow.MPIJob{
+			obj: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test-job",
 					Namespace:         "default",
@@ -365,7 +365,7 @@ func TestDeleteMPIJob(t *testing.T) {
 					},
 				},
 			},
-			heterJob: &kubeflow.MPIJob{
+			heterJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "heter-job",
 					Namespace:         "default",
@@ -388,15 +388,15 @@ func TestDeleteMPIJob(t *testing.T) {
 			controller, informerFactory := newHeterJobController(kubeClient, kubeflowClient, 0)
 
 			if tc.heterJob != nil {
-				err := informerFactory.Kubeflow().V2beta1().MPIJobs().Informer().GetIndexer().Add(tc.heterJob)
+				err := informerFactory.Kubeflow().V2beta1().ResilientJobs().Informer().GetIndexer().Add(tc.heterJob)
 				assert.NoError(t, err)
 			}
 
-			controller.deleteMPIJob(tc.obj)
+			controller.deleteResilientJob(tc.obj)
 
 			if tc.expectDelete {
 				// Verify heter job was deleted
-				_, err := kubeflowClient.KubeflowV2beta1().MPIJobs(tc.heterJob.Namespace).Get(
+				_, err := kubeflowClient.KubeflowV2beta1().ResilientJobs(tc.heterJob.Namespace).Get(
 					context.TODO(), tc.heterJob.Name, metav1.GetOptions{})
 				assert.Error(t, err)
 			}
@@ -410,13 +410,13 @@ func TestRunWorker(t *testing.T) {
 	controller, _ := newHeterJobController(kubeClient, kubeflowClient, 0)
 
 	// Add a job to the queue
-	testJob := &kubeflow.MPIJob{
+	testJob := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
 		},
 	}
-	controller.addMPIJob(testJob)
+	controller.addResilientJob(testJob)
 
 	// Run worker
 	stopCh := make(chan struct{})
@@ -433,13 +433,13 @@ func TestRunWorker(t *testing.T) {
 
 func TestUpdateLauncherJobAnnotation(t *testing.T) {
 	testCases := map[string]struct {
-		job          *kubeflow.MPIJob
+		job          *kubeflow.ResilientJob
 		ipList       string
 		expectUpdate bool
 		expectError  bool
 	}{
 		"update with valid ip list": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "test-job",
 					Namespace:   "default",
@@ -451,7 +451,7 @@ func TestUpdateLauncherJobAnnotation(t *testing.T) {
 			expectError:  false,
 		},
 		"empty ip list": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "test-job",
 					Namespace:   "default",
@@ -463,7 +463,7 @@ func TestUpdateLauncherJobAnnotation(t *testing.T) {
 			expectError:  false,
 		},
 		"nil annotations map": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -495,13 +495,13 @@ func TestUpdateLauncherJobAnnotation(t *testing.T) {
 
 			if tc.expectUpdate {
 				// Verify the job was updated
-				updatedJob, err := kubeflowClient.KubeflowV2beta1().MPIJobs(tc.job.Namespace).Get(
+				updatedJob, err := kubeflowClient.KubeflowV2beta1().ResilientJobs(tc.job.Namespace).Get(
 					context.TODO(), tc.job.Name, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Equal(t, tc.ipList, updatedJob.Annotations[heterIPListKey])
 			} else {
 				// Verify no update was made
-				updatedJob, err := kubeflowClient.KubeflowV2beta1().MPIJobs(tc.job.Namespace).Get(
+				updatedJob, err := kubeflowClient.KubeflowV2beta1().ResilientJobs(tc.job.Namespace).Get(
 					context.TODO(), tc.job.Name, metav1.GetOptions{})
 				assert.NoError(t, err)
 				_, exists := updatedJob.Annotations[heterIPListKey]

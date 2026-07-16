@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -26,15 +26,15 @@ func newFakeRecorder() record.EventRecorder {
 
 func TestConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob *kubeflow.MPIJob
+		mpiJob *kubeflow.ResilientJob
 		result string
 	}{
 		"default user without password": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					RunPolicy: kubeflow.RunPolicy{
 						SchedulingPolicy: &kubeflow.SchedulingPolicy{
 							MinAvailable:  pointer.Int32(2),
@@ -89,11 +89,11 @@ ListenAddress 0.0.0.0
 `,
 		},
 		"default user with password": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					RunPolicy: kubeflow.RunPolicy{
 						SchedulingPolicy: &kubeflow.SchedulingPolicy{
 							MinAvailable:  pointer.Int32(2),
@@ -165,17 +165,17 @@ ListenAddress 0.0.0.0
 
 func TestNewConfigMap2(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob            *kubeflow.MPIJob
+		mpiJob            *kubeflow.ResilientJob
 		expectedSSHPort   string
 		expectedRootLogin bool
 	}{
 		"default configuration": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeLauncher: {
 							Replicas: pointer.Int32(1),
@@ -190,11 +190,11 @@ func TestNewConfigMap2(t *testing.T) {
 			expectedRootLogin: true,
 		},
 		"custom ssh port": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-custom-port",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeLauncher: {
 							Replicas: pointer.Int32(1),
@@ -248,17 +248,17 @@ func TestNewConfigMap2(t *testing.T) {
 func TestGetOrCreateConfigMap(t *testing.T) {
 	testCases := map[string]struct {
 		existingConfigMap *corev1.ConfigMap
-		mpiJob            *kubeflow.MPIJob
+		mpiJob            *kubeflow.ResilientJob
 		expectError       bool
 	}{
 		"create new configmap": {
 			existingConfigMap: nil,
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeLauncher: {
 							Replicas: pointer.Int32(1),
@@ -287,7 +287,7 @@ func TestGetOrCreateConfigMap(t *testing.T) {
 					"old-key": "old-value",
 				},
 			},
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -398,7 +398,7 @@ func TestGetOrCreateConfigMap(t *testing.T) {
 			}
 
 			// Create controller with fake clients
-			c := &MPIJobController{
+			c := &ResilientJobController{
 				kubeClient:      kubeClient,
 				configMapLister: configMapLister,
 				podLister:       podLister,
@@ -429,20 +429,20 @@ func TestGetOrCreateConfigMap(t *testing.T) {
 
 func TestUpdateServiceWithIP(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob       *kubeflow.MPIJob
+		mpiJob       *kubeflow.ResilientJob
 		launcher     *corev1.Pod
 		workers      []*corev1.Pod
 		horkers      []*corev1.Pod
 		expectUpdate bool
 	}{
 		"all pods running": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
 					UID:       "test-uid",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeLauncher: {Replicas: pointer.Int32(1)},
 						kubeflow.MPIReplicaTypeWorker:   {Replicas: pointer.Int32(2)},

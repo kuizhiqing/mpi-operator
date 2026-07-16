@@ -1,9 +1,9 @@
-# kmpi-operator Design Docs
+# kresilient-training-operator Design Docs
 
 > Generated: 2026-05-25.
 >
 > This directory is the single source of truth for the engineering plan of
-> the **kmpi-operator** fork. It captures *what we have*, *where we want to
+> the **kresilient-training-operator** fork. It captures *what we have*, *where we want to
 > go*, *what's broken or under-baked*, and *the sequenced plan to get there*.
 
 ## Documents
@@ -22,15 +22,15 @@ Read in this order if you're new: `feature-summary.md` → `roadmap.md`
 
 ## One-Page Executive Summary
 
-### What kmpi-operator is
+### What kresilient-training-operator is
 
-A Kubernetes operator that owns the `kubeflow.org/v2beta1.MPIJob` CRD and runs
+A Kubernetes operator that owns the `kubeflow.org/v2beta1.ResilientJob` CRD and runs
 allreduce-style distributed training (Horovod, TensorFlow, PyTorch+Horovod,
 custom MPI binaries). It is an **internally extended fork** of upstream
-`kubeflow/mpi-operator` with three categories of additions:
+`kuizhiqing/resilient-training-operator` with three categories of additions:
 
 1. **Heterogeneous workers** — a third replica role (`Horker`) and a
-   second binary (`heter-controller`) that wires two MPIJobs together via
+   second binary (`heter-controller`) that wires two ResilientJobs together via
    IP-list annotations.
 2. **Fault-tolerant execution** — a `mpirun-recover.sh` shell that wraps the
    user command in a peer-barrier + restart loop, propagates a curated set
@@ -60,11 +60,11 @@ custom MPI binaries). It is an **internally extended fork** of upstream
 
 The roadmap commits to four near-term outcomes:
 
-1. **Honest API** — promote the fork's annotations into typed `MPIJobSpec`
+1. **Honest API** — promote the fork's annotations into typed `ResilientJobSpec`
    fields (Phase 1 of `plan.md`).
 2. **Resilient at scale** — parallel Pod creation, generation-aware
    informer filtering, OTel tracing, reconcile metrics (Phase 2).
-3. **First-class heterogeneity** — collapse the two-MPIJob Horker model
+3. **First-class heterogeneity** — collapse the two-ResilientJob Horker model
    into one CRD and integrate with Kueue (Phase 3).
 4. **Safe to run in shared clusters** — RBAC scope-down, signed releases,
    multi-arch images, Helm OCI delivery (Phase 4).

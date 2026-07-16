@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	kubeflowv2beta1 "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/typed/kubeflow/v2beta1"
+	kubeflowv2beta1 "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/typed/kubeflow/v2beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

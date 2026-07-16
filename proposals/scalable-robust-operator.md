@@ -32,9 +32,9 @@ The original design of the operator can be found as a
 The latest release includes a v1alpha2 API and controller.
 A v1 is under development. Something to highlight in this new version is the
 replacement of the Job and StatefulSet by plain Pods, with the intent of
-[tracking running Pods](https://github.com/kubeflow/mpi-operator/issues/201#issuecomment-827837831).
+[tracking running Pods](https://github.com/kuizhiqing/resilient-training-operator/issues/201#issuecomment-827837831).
 
-An MPIJob CRD describes the Job. Important fields include:
+An ResilientJob CRD describes the Job. Important fields include:
 - The workers template
 - The number of workers
 - The launcher template, which should have a `mpirun` command.
@@ -42,7 +42,7 @@ An MPIJob CRD describes the Job. Important fields include:
 The images are expected to have the MPI implementation binaries (such as
 OpenMPI, Intel MPI or MPICH) the user’s MPI executable.
 
-A controller processes the MPIJob, starting a Job with the following steps:
+A controller processes the ResilientJob, starting a Job with the following steps:
 1. Creates ConfigMap, which contains:
   - A script `kubexec.sh` that wraps `kubectl exec` and is used in replacement
     of `ssh`. This script, before executing the command provided by `mpirun`,
@@ -82,9 +82,9 @@ the following:
 2. Wait for all Pods in the hostfile to be running
 3. Generates a file mapping pod name to IP, in `/etc/hosts` format.
 
-To update the status of an MPIJob, the controller uses the status of the
+To update the status of an ResilientJob, the controller uses the status of the
 launcher Job. That is, when the launcher Job fails or succeeds, it’s status is
-copied to the MPIJob. In v1, it bases the status on the termination condition of
+copied to the ResilientJob. In v1, it bases the status on the termination condition of
 the Pod.
 
 ### Analysis
@@ -109,7 +109,7 @@ The reasons for this are:
   number of workers.
   
 Another problem is that the v1 controller doesn’t implement launcher pod
-retries, although there are plans to. So the MPIJob behaves like a plain Pod in
+retries, although there are plans to. So the ResilientJob behaves like a plain Pod in
 this version.
 
 ## Design

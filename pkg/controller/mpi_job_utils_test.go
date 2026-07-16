@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,15 +12,15 @@ import (
 
 func TestEnableLauncherAsWorker(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob   *kubeflow.MPIJob
+		mpiJob   *kubeflow.ResilientJob
 		expected bool
 	}{
 		"default case": {
-			mpiJob:   &kubeflow.MPIJob{},
+			mpiJob:   &kubeflow.ResilientJob{},
 			expected: true,
 		},
 		"disabled by label": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						launcherAsWorker: "false",
@@ -30,7 +30,7 @@ func TestEnableLauncherAsWorker(t *testing.T) {
 			expected: false,
 		},
 		"disabled by annotation": {
-			mpiJob: &kubeflow.MPIJob{
+			mpiJob: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						launcherAsWorker: "false",
@@ -50,7 +50,7 @@ func TestEnableLauncherAsWorker(t *testing.T) {
 }
 
 func TestNewJobService(t *testing.T) {
-	job := &kubeflow.MPIJob{
+	job := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
@@ -78,15 +78,15 @@ func TestNewJobService(t *testing.T) {
 
 func TestGetReplicasEnv(t *testing.T) {
 	testCases := map[string]struct {
-		mpiJob      *kubeflow.MPIJob
+		mpiJob      *kubeflow.ResilientJob
 		rtype       kubeflow.MPIReplicaType
 		key         string
 		expectFound bool
 		expectValue string
 	}{
 		"env exists in launcher": {
-			mpiJob: &kubeflow.MPIJob{
-				Spec: kubeflow.MPIJobSpec{
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeLauncher: {
 							Template: corev1.PodTemplateSpec{
@@ -124,7 +124,7 @@ func TestGetReplicasEnv(t *testing.T) {
 }
 
 func TestReplicasName(t *testing.T) {
-	job := &kubeflow.MPIJob{
+	job := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-job",
 		},
@@ -162,12 +162,12 @@ func TestReplicasName(t *testing.T) {
 
 func TestWorkerReplicas(t *testing.T) {
 	testCases := map[string]struct {
-		job      *kubeflow.MPIJob
+		job      *kubeflow.ResilientJob
 		expected int32
 	}{
 		"with replicas": {
-			job: &kubeflow.MPIJob{
-				Spec: kubeflow.MPIJobSpec{
+			job: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{
 						kubeflow.MPIReplicaTypeWorker: {
 							Replicas: pointer.Int32(2),
@@ -178,8 +178,8 @@ func TestWorkerReplicas(t *testing.T) {
 			expected: 2,
 		},
 		"no replicas": {
-			job: &kubeflow.MPIJob{
-				Spec: kubeflow.MPIJobSpec{
+			job: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
 					MPIReplicaSpecs: map[kubeflow.MPIReplicaType]*kubeflow.ReplicaSpec{},
 				},
 			},

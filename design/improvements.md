@@ -1,4 +1,4 @@
-# Improvements — kmpi-operator
+# Improvements — kresilient-training-operator
 
 > Companion to `feature-summary.md` and `roadmap.md`.
 > Concrete, code-level improvements ranked by *impact ÷ effort*. Each item
@@ -17,7 +17,7 @@ Legend:
 * **Where:** `pkg/apis/kubeflow/validation/validation.go:40-43`
 * **Symptom:** `validRestartPolicies` only contains `Never` and `OnFailure`;
   `RestartPolicyAlways` and `RestartPolicyExitCode` are documented in
-  `types.go:347-359` but `ValidateMPIJob` will fail any spec using them.
+  `types.go:347-359` but `ValidateResilientJob` will fail any spec using them.
 * **Fix:** Add the missing entries (or, for `Always`, decide whether it is
   intentionally banned and remove it from the type docs).
 
@@ -71,7 +71,7 @@ launcher-finished cleanup
 * `mpi_job_controller.go:98-100` — `noRestartExitCode = 222`,
   `largeScaleThold = 200`, `restartLimitThold = 100`.
 * Promote to flags (`--restart-large-scale-threshold`,
-  `--no-restart-exit-code`, …) **or** to fields on `MPIJobSpec.RunPolicy`
+  `--no-restart-exit-code`, …) **or** to fields on `ResilientJobSpec.RunPolicy`
   for per-job override.
 
 ### P1-5 — Embedded shell scripts as Go strings
@@ -85,7 +85,7 @@ controllers (`mpi_job_controller.go:61`, used by `heter_job_controller.go`).
   attributable.
 
 ### P2-2 — Inconsistent receiver-name style
-* Mix of `c *MPIJobController` and `c *HeterJobController`. Fine. But helper
+* Mix of `c *ResilientJobController` and `c *HeterJobController`. Fine. But helper
   functions like `getStatusIPList` are package-level despite being
   controller-internal.
 
@@ -120,7 +120,7 @@ validator
 
 | Area | State | Suggestion |
 |------|-------|------------|
-| `MPIJobController` | 1397-line `_test.go`; covers happy paths, suspend, gang scheduling | Add table tests for the `frozen`, `recover`, `launcher-as-worker` annotation matrix |
+| `ResilientJobController` | 1397-line `_test.go`; covers happy paths, suspend, gang scheduling | Add table tests for the `frozen`, `recover`, `launcher-as-worker` annotation matrix |
 | `HeterJobController` | 512-line `_test.go` | Add a flake-prone race test: peer Job updated mid-reconcile |
 | `validation_test.go` | 388 LoC | Add cases for P0-1 / P0-2 above |
 | `mpirun-recover.sh` | None | Add a Bats (or shellspec) test suite that runs the script under a fake `/etc/mpi/environ`, asserts retry behavior, kill behavior, env-var propagation |
@@ -135,13 +135,13 @@ generated artifacts. Move to `.gitignore` and emit from CI.
 ## 5. Performance & scalability
 
 ### P1-9 — Default Kube API QPS/Burst is too low
-* `cmd/mpi-operator/app/options/options.go:85-86` — defaults `5`/`10`.
+* `cmd/resilient-training-operator/app/options/options.go:85-86` — defaults `5`/`10`.
 * The internal workqueue is sized at `200/2000` but it can't keep that pace if
   the API client throttles. Bump to `100/200` (or align with the workqueue).
 
 ### P1-10 — `handleObjectUpdate` enqueues on *every* update
 * `mpi_job_controller.go:392-411` — config map / secret / service / pod
-  events all trigger a re-reconcile of the owning MPIJob. For a 1000-pod job
+  events all trigger a re-reconcile of the owning ResilientJob. For a 1000-pod job
   that's a thundering herd at startup. Add a resource-version cache or
   generation-based filter.
 
@@ -173,7 +173,7 @@ generated artifacts. Move to `.gitignore` and emit from CI.
 
 ### P2-4 — `mpi_operator_job_info` gauge cleanup on delete
 * Confirm `mpi_job_controller_status.go` deletes the gauge series when the
-  MPIJob is GC'd; otherwise the metric grows unbounded over a long-lived
+  ResilientJob is GC'd; otherwise the metric grows unbounded over a long-lived
   controller.
 
 ---

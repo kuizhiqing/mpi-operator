@@ -24,7 +24,7 @@ const (
 	// GroupName is the group name use in this package.
 	GroupName = "kubeflow.org"
 	// Kind is the kind name.
-	Kind = "MPIJob"
+	Kind = "ResilientJob"
 	// GroupVersion is the version.
 	GroupVersion = "v2beta1"
 )
@@ -44,8 +44,8 @@ func Resource(resource string) schema.GroupResource {
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&MPIJob{},
-		&MPIJobList{},
+		&ResilientJob{},
+		&ResilientJobList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

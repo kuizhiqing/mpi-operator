@@ -15,7 +15,7 @@ RUN apt remove libcap2-bin -y
 
 # Allow OpenSSH to talk to containers without asking for confirmation
 # by disabling StrictHostKeyChecking.
-# mpi-operator mounts the .ssh folder from a Secret. For that to work, we need
+# resilient-training-operator mounts the .ssh folder from a Secret. For that to work, we need
 # to disable UserKnownHostsFile to avoid write permissions.
 # Disabling StrictModes avoids directory and files read permission checks.
 RUN sed -i "s/[ #]\(.*StrictHostKeyChecking \).*/ \1no/g" /etc/ssh/ssh_config \

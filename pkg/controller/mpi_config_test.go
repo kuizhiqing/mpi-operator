@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,12 +27,12 @@ func TestGenSSHKeyPair(t *testing.T) {
 
 func TestGetSSHKeyPair(t *testing.T) {
 	testCases := map[string]struct {
-		job           *kubeflow.MPIJob
+		job           *kubeflow.ResilientJob
 		expectErr     bool
 		checkExisting bool
 	}{
 		"with valid annotations": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -45,7 +45,7 @@ func TestGetSSHKeyPair(t *testing.T) {
 			checkExisting: true,
 		},
 		"without annotations": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -54,7 +54,7 @@ func TestGetSSHKeyPair(t *testing.T) {
 			expectErr: true,
 		},
 		"with invalid base64 public key": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -67,7 +67,7 @@ func TestGetSSHKeyPair(t *testing.T) {
 			expectErr: true,
 		},
 		"with invalid base64 private key": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -103,7 +103,7 @@ func TestGetSSHKeyPair(t *testing.T) {
 }
 
 func TestNewSSHAuthSecret(t *testing.T) {
-	job := &kubeflow.MPIJob{
+	job := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
@@ -125,7 +125,7 @@ func TestNewSSHAuthSecret(t *testing.T) {
 }
 
 func TestSetupSSHOnPod(t *testing.T) {
-	job := &kubeflow.MPIJob{
+	job := &kubeflow.ResilientJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-job",
 			Namespace: "default",
@@ -138,7 +138,7 @@ func TestSetupSSHOnPod(t *testing.T) {
 		}},
 	}
 
-	controller := &MPIJobController{}
+	controller := &ResilientJobController{}
 	controller.setupSSHOnPod(podSpec, job)
 
 	// Verify volumes
@@ -159,13 +159,13 @@ func TestSetupSSHOnPod(t *testing.T) {
 
 func TestUpdateSSHAuthSecret(t *testing.T) {
 	testCases := map[string]struct {
-		job          *kubeflow.MPIJob
+		job          *kubeflow.ResilientJob
 		existingData map[string][]byte
 		expectErr    bool
 		checkUpdated bool
 	}{
 		"without annotations": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -177,7 +177,7 @@ func TestUpdateSSHAuthSecret(t *testing.T) {
 			},
 		},
 		"with invalid base64 keys": {
-			job: &kubeflow.MPIJob{
+			job: &kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-job",
 					Namespace: "default",
@@ -196,10 +196,10 @@ func TestUpdateSSHAuthSecret(t *testing.T) {
 		startTime := metav1.Now()
 		completionTime := metav1.Now()
 
-		mpiJob := newMPIJob("test", newInt32(64), &startTime, &completionTime)
-		f.setUpMPIJob(mpiJob)
+		mpiJob := newResilientJob("test", newInt32(64), &startTime, &completionTime)
+		f.setUpResilientJob(mpiJob)
 
-		controller := f.newFakeMPIJobController()
+		controller := f.newFakeResilientJobController()
 		t.Run(name, func(t *testing.T) {
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{

@@ -26,18 +26,18 @@ import (
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
-	mpijobv2 "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	resilientjobv2 "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 )
 
-// Generate OpenAPI spec definitions for MPIJob Resource
+// Generate OpenAPI spec definitions for ResilientJob Resource
 func main() {
 	if len(os.Args) <= 1 {
-		klog.Fatal("Supply the MPIJob version")
+		klog.Fatal("Supply the ResilientJob version")
 	}
 
 	version := os.Args[1]
 	if version != "v2beta1" {
-		fmt.Println("`v2beta1` for MPIJob is supported now")
+		fmt.Println("`v2beta1` for ResilientJob is supported now")
 	}
 
 	filter := func(name string) spec.Ref {
@@ -45,7 +45,7 @@ func main() {
 			"#/definitions/" + common.EscapeJsonPointer(swaggify(name)))
 	}
 
-	oAPIDefs := mpijobv2.GetOpenAPIDefinitions(filter)
+	oAPIDefs := resilientjobv2.GetOpenAPIDefinitions(filter)
 	defs := spec.Definitions{}
 	for defName, val := range oAPIDefs {
 		defs[swaggify(defName)] = val.Schema
@@ -57,8 +57,8 @@ func main() {
 			Paths:       &spec.Paths{Paths: map[string]spec.PathItem{}},
 			Info: &spec.Info{
 				InfoProps: spec.InfoProps{
-					Title:       "mpijob",
-					Description: "Python SDK for MPI-Operator",
+					Title:       "resilientjob",
+					Description: "Python SDK for Resilient Training Operator",
 					Version:     version,
 				},
 			},
@@ -72,7 +72,7 @@ func main() {
 }
 
 func swaggify(name string) string {
-	name = strings.Replace(name, "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/", "", -1)
+	name = strings.Replace(name, "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/", "", -1)
 	name = strings.Replace(name, "github.com/kubernetes-sigs/kube-batch/pkg/client/clientset/", "", -1)
 	name = strings.Replace(name, "k8s.io/api/core/", "", -1)
 	name = strings.Replace(name, "k8s.io/apimachinery/pkg/apis/meta/", "", -1)

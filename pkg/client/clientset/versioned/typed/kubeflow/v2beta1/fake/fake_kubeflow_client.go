@@ -17,7 +17,7 @@
 package fake
 
 import (
-	v2beta1 "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/typed/kubeflow/v2beta1"
+	v2beta1 "github.com/kuizhiqing/resilient-training-operator/pkg/client/clientset/versioned/typed/kubeflow/v2beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
@@ -26,8 +26,8 @@ type FakeKubeflowV2beta1 struct {
 	*testing.Fake
 }
 
-func (c *FakeKubeflowV2beta1) MPIJobs(namespace string) v2beta1.MPIJobInterface {
-	return &FakeMPIJobs{c, namespace}
+func (c *FakeKubeflowV2beta1) ResilientJobs(namespace string) v2beta1.ResilientJobInterface {
+	return &FakeResilientJobs{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

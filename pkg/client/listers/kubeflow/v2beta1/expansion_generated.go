@@ -16,10 +16,10 @@
 
 package v2beta1
 
-// MPIJobListerExpansion allows custom methods to be added to
-// MPIJobLister.
-type MPIJobListerExpansion interface{}
+// ResilientJobListerExpansion allows custom methods to be added to
+// ResilientJobLister.
+type ResilientJobListerExpansion interface{}
 
-// MPIJobNamespaceListerExpansion allows custom methods to be added to
-// MPIJobNamespaceLister.
-type MPIJobNamespaceListerExpansion interface{}
+// ResilientJobNamespaceListerExpansion allows custom methods to be added to
+// ResilientJobNamespaceLister.
+type ResilientJobNamespaceListerExpansion interface{}

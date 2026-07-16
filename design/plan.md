@@ -1,4 +1,4 @@
-# Implementation Plan — kmpi-operator
+# Implementation Plan — kresilient-training-operator
 
 > Companion to `feature-summary.md`, `roadmap.md`, `improvements.md`.
 > This is the *executable* plan: phased, with deliverables, exit criteria,
@@ -53,12 +53,12 @@ without breaking existing users.
 
 | ID | Deliverable | Source | Effort |
 |----|-------------|--------|--------|
-| 1.1 | Add `MPIJobSpec.Recovery` block: `enabled`, `maxAttempts`, `peerBarrierTimeout`, `pythonKillGracePeriod`. Defaults preserve current `mpirun-recover.sh` behavior. | A1, R1 | 4d |
-| 1.2 | Add `MPIJobSpec.RunPolicy.Frozen *bool`; treat existing `kubeflow.org/frozen` as a deprecated fallback that logs a warning. | A1 | 1d |
+| 1.1 | Add `ResilientJobSpec.Recovery` block: `enabled`, `maxAttempts`, `peerBarrierTimeout`, `pythonKillGracePeriod`. Defaults preserve current `mpirun-recover.sh` behavior. | A1, R1 | 4d |
+| 1.2 | Add `ResilientJobSpec.RunPolicy.Frozen *bool`; treat existing `kubeflow.org/frozen` as a deprecated fallback that logs a warning. | A1 | 1d |
 | 1.3 | Add `MPIReplicaSpec.LauncherAsWorker *bool` and remove the same-named annotation in favor of it. | A1 | 1d |
-| 1.4 | Promote `largeScaleThold`, `restartLimitThold`, `noRestartExitCode` to `MPIJobSpec.RunPolicy` fields **and** controller `--flag` defaults. | P1-4, R2 | 3d |
+| 1.4 | Promote `largeScaleThold`, `restartLimitThold`, `noRestartExitCode` to `ResilientJobSpec.RunPolicy` fields **and** controller `--flag` defaults. | P1-4, R2 | 3d |
 | 1.5 | Defaulting + validation for all new fields; OpenAPI regen; CRD bump. | A2, A3, P1-6, P1-7, P1-8 | 3d |
-| 1.6 | Conversion / migration notes. Run a smoke test that an existing v2beta1 MPIJob (annotation form) still works. | – | 2d |
+| 1.6 | Conversion / migration notes. Run a smoke test that an existing v2beta1 ResilientJob (annotation form) still works. | – | 2d |
 | 1.7 | Optional admission webhook (validating). Behind a flag; off by default. | A5 | 5d |
 | 1.8 | Regenerate `sdk/python/v2beta1`; bump version. | E2 | 2d |
 
@@ -99,7 +99,7 @@ and resilient.
 
 ### Exit criteria
 
-* Reconcile p99 ≤ 500 ms for a 1000-worker MPIJob (measure under KIND with
+* Reconcile p99 ≤ 500 ms for a 1000-worker ResilientJob (measure under KIND with
   emulated workers).
 * No regressions in the OpenMPI/Intel/MPICH matrix e2e.
 * Metrics dashboards (Grafana JSON) committed to `manifests/observability/`.
@@ -121,7 +121,7 @@ and resilient.
 | ID | Deliverable | Source | Effort |
 |----|-------------|--------|--------|
 | 3.1 | Promote `Horker` to a typed peer of `Worker`: dedicated `slotsPerHorker`, `affinity` defaults, `topologyKey`. | H1 | 5d |
-| 3.2 | Single-MPIJob heterogeneous model: `MPIReplicaType=PrimaryWorker / Horker` colocated in one CRD. Mark the `heter-controller` binary deprecated for removal in the next minor. | H2 | 8d |
+| 3.2 | Single-ResilientJob heterogeneous model: `MPIReplicaType=PrimaryWorker / Horker` colocated in one CRD. Mark the `heter-controller` binary deprecated for removal in the next minor. | H2 | 8d |
 | 3.3 | Kueue `Workload` emission (behind a flag). Validation against Kueue v0.6+. | H3 | 5d |
 | 3.4 | Topology-aware scheduling hints: surface NUMA/NVLink/RDMA fabric topologies via Pod labels and gang-scheduler `minResources`. | H4 | 5d |
 | 3.5 | Horker example under `examples/v2beta1/heter/`. | P2-6 | 2d |
@@ -162,7 +162,7 @@ artifacts.
 ### Exit criteria
 
 * All release artifacts are signed and verifiable with `cosign verify`.
-* `helm install kmpi-operator oci://...` works against k8s 1.27, 1.29, 1.31.
+* `helm install kresilient-training-operator oci://...` works against k8s 1.27, 1.29, 1.31.
 * SBOM published per image.
 
 ### Risks
@@ -211,13 +211,13 @@ Q3 2026, Phase 2 in Q4 2026, Phases 3+4 across H1 2027.
 
 * Slurm/PBS bridges.
 * Replacing OpenMPI with a single implementation.
-* Federated multi-cluster MPIJobs (revisit in 2027).
+* Federated multi-cluster ResilientJobs (revisit in 2027).
 
 ---
 
 ## Open questions
 
-1. Does this fork still want to track upstream `kubeflow/mpi-operator`
+1. Does this fork still want to track upstream `kuizhiqing/resilient-training-operator`
    releases, or fully diverge? Phase 1's CRD changes lean toward divergence.
 2. Volcano vs. scheduler-plugins long-term: should one be the default and
    the other "best-effort"?

@@ -19,23 +19,23 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	kubeflow "github.com/kubeflow/mpi-operator/pkg/apis/kubeflow/v2beta1"
+	kubeflow "github.com/kuizhiqing/resilient-training-operator/pkg/apis/kubeflow/v2beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-func TestValidateMPIJob(t *testing.T) {
+func TestValidateResilientJob(t *testing.T) {
 	cases := map[string]struct {
-		job      kubeflow.MPIJob
+		job      kubeflow.ResilientJob
 		wantErrs field.ErrorList
 	}{
 		"valid (intel)": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -57,11 +57,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"valid with worker (intel)": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -92,11 +92,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"valid (mpich)": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -118,11 +118,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"valid with worker (mpich)": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -181,11 +181,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"invalid fields": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "this-name-is-waaaaaaaay-too-long-for-a-worker-hostname",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy:          kubeflow.NewCleanPodPolicy("unknown"),
@@ -245,11 +245,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"missing replica spec fields": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -290,11 +290,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"invalid replica fields": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -339,11 +339,11 @@ func TestValidateMPIJob(t *testing.T) {
 			},
 		},
 		"invalid mpiJob name": {
-			job: kubeflow.MPIJob{
+			job: kubeflow.ResilientJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "1-foo",
 				},
-				Spec: kubeflow.MPIJobSpec{
+				Spec: kubeflow.ResilientJobSpec{
 					SlotsPerWorker: newInt32(2),
 					RunPolicy: kubeflow.RunPolicy{
 						CleanPodPolicy: kubeflow.NewCleanPodPolicy(kubeflow.CleanPodPolicyRunning),
@@ -371,7 +371,7 @@ func TestValidateMPIJob(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := ValidateMPIJob(&tc.job)
+			got := ValidateResilientJob(&tc.job)
 			if diff := cmp.Diff(tc.wantErrs, got, cmpopts.IgnoreFields(field.Error{}, "Detail", "BadValue")); diff != "" {
 				t.Errorf("Unexpected errors (-want,+got):\n%s", diff)
 			}

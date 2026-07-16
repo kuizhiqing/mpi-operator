@@ -1,5 +1,5 @@
 {
-  "packageName" : "mpijob",
+  "packageName" : "resilientjob",
   "projectName" : "kubeflow",
   "packageVersion": "0.1",
   "importMappings": {
