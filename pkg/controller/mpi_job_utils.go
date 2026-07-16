@@ -9,21 +9,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/pointer"
 )
 
-// enableLauncherAsWorker check whether to run worker process in launcher pod
+// enableLauncherAsWorker reports whether a worker process runs inside the
+// launcher pod, driven by spec.launcherAsWorker (defaults to true).
 func enableLauncherAsWorker(mpiJob *kubeflow.ResilientJob) bool {
-	if v, ok := mpiJob.Labels[launcherAsWorker]; ok {
-		if strings.ToLower(v) == "false" {
-			return false
-		}
-	}
-	if v, ok := mpiJob.Annotations[launcherAsWorker]; ok {
-		if strings.ToLower(v) == "false" {
-			return false
-		}
-	}
-	return true
+	return pointer.BoolDeref(mpiJob.Spec.LauncherAsWorker, true)
 }
 
 func getAnnotation(mpiJob *kubeflow.ResilientJob, key string) string {
@@ -45,32 +37,21 @@ func noLauncher(mpiJob *kubeflow.ResilientJob) bool {
 	return false
 }
 
+// elasticEnabled reports whether elastic, fault-tolerant execution is enabled,
+// driven by spec.elasticPolicy (a nil policy defaults to enabled).
 func elasticEnabled(mpiJob *kubeflow.ResilientJob) bool {
-	if elastic, ok := mpiJob.Labels[elasticLableName]; ok {
-		if strings.ToLower(elastic) == "false" {
-			return false
-		}
+	if mpiJob.Spec.ElasticPolicy == nil {
+		return true
 	}
-	if v, ok := mpiJob.Annotations[elasticLableName]; ok {
-		if strings.ToLower(v) == "false" {
-			return false
-		}
-	}
-	return true
+	return pointer.BoolDeref(mpiJob.Spec.ElasticPolicy.Enabled, true)
 }
 
-// isFrozen reports whether the ResilientJob is marked as frozen via the
-// `kubeflow.org/frozen=true` annotation. A frozen job is paused: the
-// controller skips status changes, failure checks, and pod
-// create/clean-up operations until the annotation is removed or set
-// back to "false".
+// isFrozen reports whether the ResilientJob is paused via spec.frozen. A frozen
+// job is not reconciled: the controller skips status changes, failure checks,
+// and pod create/clean-up until it is unset. Unlike RunPolicy.suspend, existing
+// pods are left running.
 func isFrozen(mpiJob *kubeflow.ResilientJob) bool {
-	if v, ok := mpiJob.Annotations[frozenAnnotation]; ok {
-		if strings.ToLower(v) == "true" {
-			return true
-		}
-	}
-	return false
+	return pointer.BoolDeref(mpiJob.Spec.Frozen, false)
 }
 
 func newJobService(job *kubeflow.ResilientJob) *corev1.Service {

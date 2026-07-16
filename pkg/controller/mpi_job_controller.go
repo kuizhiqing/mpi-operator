@@ -81,7 +81,7 @@ const (
 	worker                  = "worker"
 	horker                  = "horker"
 	labelGroupName          = "group-name"
-	labelResilientJobName         = "mpi-job-name"
+	labelResilientJobName   = "mpi-job-name"
 	labelMPIRoleType        = "mpi-job-role"
 	sshPublicKey            = "ssh-publickey"
 	sshPrivateKeyFile       = "id_rsa"
@@ -91,13 +91,13 @@ const (
 	sshAuthorizedKeysFile   = "authorized_keys"
 	configMapVolumeVersion  = "configmap-volume-version"
 
-	elasticLableName  = "kubeflow.org/elastic"
-	enableRecover     = "kubeflow.org/recover"
-	launcherAsWorker  = "kubeflow.org/launcher-as-worker"
-	frozenAnnotation  = "kubeflow.org/frozen"
-	noRestartExitCode = 222
-	largeScaleThold   = 200
-	restartLimitThold = 100
+	// recoverStateAnnotation carries the runtime recover-state signal into the
+	// launcher configmap (e.g. the value "debug" pauses the recover wrapper).
+	// Whether recovery is enabled is controlled by spec.recoverPolicy, not this.
+	recoverStateAnnotation = "kubeflow.org/recover"
+	noRestartExitCode      = 222
+	largeScaleThold        = 200
+	restartLimitThold      = 100
 )
 
 const (
@@ -569,10 +569,9 @@ func (c *ResilientJobController) syncHandler(key string) error {
 		return nil
 	}
 
-	// If the ResilientJob is marked as frozen via the `kubeflow.org/frozen=true`
-	// annotation, pause it: do not change status, do not check for
-	// failures, do not clean up or create pods. The previous behavior
-	// resumes once the annotation is removed or set back to "false".
+	// If the ResilientJob is marked frozen via spec.frozen, pause it: do not
+	// change status, do not check for failures, do not clean up or create pods.
+	// The previous behavior resumes once spec.frozen is set back to false.
 	if isFrozen(mpiJob) {
 		klog.V(4).Infof("ResilientJob %s/%s is marked frozen; skipping reconciliation", mpiJob.Namespace, mpiJob.Name)
 		return nil

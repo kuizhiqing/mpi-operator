@@ -71,6 +71,25 @@ func SetDefaults_ResilientJob(mpiJob *ResilientJob) {
 		mpiJob.Spec.LauncherCreationPolicy = LauncherCreationPolicyAtStartup
 	}
 
+	// Elastic execution is on by default; materialize the policy so the stored
+	// object is explicit.
+	if mpiJob.Spec.ElasticPolicy == nil {
+		mpiJob.Spec.ElasticPolicy = &ElasticPolicy{Enabled: newBool(true)}
+	} else if mpiJob.Spec.ElasticPolicy.Enabled == nil {
+		mpiJob.Spec.ElasticPolicy.Enabled = newBool(true)
+	}
+	// RecoverPolicy is left nil (recovery off) when omitted; when the user opts
+	// in by setting the block, Enabled defaults to true.
+	if mpiJob.Spec.RecoverPolicy != nil && mpiJob.Spec.RecoverPolicy.Enabled == nil {
+		mpiJob.Spec.RecoverPolicy.Enabled = newBool(true)
+	}
+	if mpiJob.Spec.LauncherAsWorker == nil {
+		mpiJob.Spec.LauncherAsWorker = newBool(true)
+	}
+	if mpiJob.Spec.Frozen == nil {
+		mpiJob.Spec.Frozen = newBool(false)
+	}
+
 	// set default to Launcher
 	setDefaultsTypeLauncher(mpiJob.Spec.MPIReplicaSpecs[MPIReplicaTypeLauncher])
 
@@ -80,6 +99,10 @@ func SetDefaults_ResilientJob(mpiJob *ResilientJob) {
 }
 
 func newInt32(v int32) *int32 {
+	return &v
+}
+
+func newBool(v bool) *bool {
 	return &v
 }
 

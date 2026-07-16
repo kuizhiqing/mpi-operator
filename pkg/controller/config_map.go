@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
+	"k8s.io/utils/pointer"
 )
 
 //go:embed mpirun-wrapper.sh
@@ -70,9 +71,19 @@ func (c *ResilientJobController) getOrCreateMPIRunWrapperConfigMap(mpiJob *kubef
 	return cm, nil
 }
 
+// recoverEnabled reports whether launcher auto-recovery is enabled, driven by
+// spec.recoverPolicy (a nil policy defaults to disabled). When enabled the
+// launcher runs the fault-tolerant mpirun recover wrapper.
+func recoverEnabled(mpiJob *kubeflow.ResilientJob) bool {
+	if mpiJob.Spec.RecoverPolicy == nil {
+		return false
+	}
+	return pointer.BoolDeref(mpiJob.Spec.RecoverPolicy.Enabled, true)
+}
+
 func newMPIRunWrapperConfig(mpiJob *kubeflow.ResilientJob, name string) *corev1.ConfigMap {
 	script := MPIRunWrapperScript
-	if _, ok := mpiJob.Annotations[enableRecover]; ok {
+	if recoverEnabled(mpiJob) {
 		script = MPIRunRecoverScript
 	}
 	return &corev1.ConfigMap{
@@ -512,8 +523,12 @@ func getNodeList(mpiJob *kubeflow.ResilientJob) string {
 	return strings.TrimSuffix(buffer.String(), ",")
 }
 
+// updateRecoverStateFromAnnotation copies the runtime recover-state signal from
+// the `kubeflow.org/recover` annotation into the launcher configmap. This is a
+// live operational channel (e.g. the value "debug" pauses the recover wrapper),
+// distinct from spec.recoverPolicy which controls whether recovery is enabled.
 func updateRecoverStateFromAnnotation(configMap *corev1.ConfigMap, mpiJob *kubeflow.ResilientJob) error {
-	recoverState := getAnnotation(mpiJob, enableRecover)
+	recoverState := getAnnotation(mpiJob, recoverStateAnnotation)
 	configMap.Data[recoverFileName] = recoverState
 	return nil
 }

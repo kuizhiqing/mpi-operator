@@ -32,6 +32,28 @@ spec:
             type: object
           spec:
             properties:
+              elasticPolicy:
+                description: ElasticPolicy configures elastic, fault-tolerant execution.
+                  When omitted, elastic behavior is enabled by default.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled toggles elastic behavior. Defaults to true.
+                    type: boolean
+                type: object
+              frozen:
+                default: false
+                description: 'Frozen pauses reconciliation: while true the controller
+                  makes no status changes and performs no Pod create/clean-up, leaving
+                  existing Pods running. Unlike RunPolicy.suspend, it does not delete
+                  Pods. Defaults to false.'
+                type: boolean
+              launcherAsWorker:
+                default: true
+                description: LauncherAsWorker runs a worker process inside the launcher
+                  pod, so the launcher also participates in the MPI hostfile. Defaults
+                  to true.
+                type: boolean
               launcherCreationPolicy:
                 default: AtStartup
                 description: launcherCreationPolicy if WaitForWorkersReady, the launcher
@@ -7827,6 +7849,17 @@ spec:
                   type: object
                 description: MPIReplicaSpecs contains maps from `MPIReplicaType` to
                   `ReplicaSpec` that specify the MPI replicas to run.
+                type: object
+              recoverPolicy:
+                description: RecoverPolicy configures launcher auto-recovery. When
+                  omitted, recovery is disabled and the standard mpirun wrapper is
+                  used.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled toggles the fault-tolerant recover wrapper.
+                      Defaults to true when the RecoverPolicy block is present.
+                    type: boolean
                 type: object
               runPolicy:
                 description: RunPolicy encapsulates various runtime policies of the

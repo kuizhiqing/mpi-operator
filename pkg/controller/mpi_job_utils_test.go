@@ -19,22 +19,18 @@ func TestEnableLauncherAsWorker(t *testing.T) {
 			mpiJob:   &kubeflow.ResilientJob{},
 			expected: true,
 		},
-		"disabled by label": {
+		"enabled explicitly": {
 			mpiJob: &kubeflow.ResilientJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						launcherAsWorker: "false",
-					},
+				Spec: kubeflow.ResilientJobSpec{
+					LauncherAsWorker: pointer.Bool(true),
 				},
 			},
-			expected: false,
+			expected: true,
 		},
-		"disabled by annotation": {
+		"disabled by field": {
 			mpiJob: &kubeflow.ResilientJob{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						launcherAsWorker: "false",
-					},
+				Spec: kubeflow.ResilientJobSpec{
+					LauncherAsWorker: pointer.Bool(false),
 				},
 			},
 			expected: false,
@@ -45,6 +41,98 @@ func TestEnableLauncherAsWorker(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := enableLauncherAsWorker(tc.mpiJob)
 			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestElasticEnabled(t *testing.T) {
+	testCases := map[string]struct {
+		mpiJob   *kubeflow.ResilientJob
+		expected bool
+	}{
+		"nil policy defaults to enabled": {
+			mpiJob:   &kubeflow.ResilientJob{},
+			expected: true,
+		},
+		"policy with nil enabled defaults to enabled": {
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
+					ElasticPolicy: &kubeflow.ElasticPolicy{},
+				},
+			},
+			expected: true,
+		},
+		"disabled": {
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
+					ElasticPolicy: &kubeflow.ElasticPolicy{Enabled: pointer.Bool(false)},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, elasticEnabled(tc.mpiJob))
+		})
+	}
+}
+
+func TestIsFrozen(t *testing.T) {
+	testCases := map[string]struct {
+		mpiJob   *kubeflow.ResilientJob
+		expected bool
+	}{
+		"default not frozen": {
+			mpiJob:   &kubeflow.ResilientJob{},
+			expected: false,
+		},
+		"frozen": {
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{Frozen: pointer.Bool(true)},
+			},
+			expected: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isFrozen(tc.mpiJob))
+		})
+	}
+}
+
+func TestRecoverEnabled(t *testing.T) {
+	testCases := map[string]struct {
+		mpiJob   *kubeflow.ResilientJob
+		expected bool
+	}{
+		"nil policy defaults to disabled": {
+			mpiJob:   &kubeflow.ResilientJob{},
+			expected: false,
+		},
+		"policy with nil enabled defaults to enabled": {
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
+					RecoverPolicy: &kubeflow.RecoverPolicy{},
+				},
+			},
+			expected: true,
+		},
+		"disabled": {
+			mpiJob: &kubeflow.ResilientJob{
+				Spec: kubeflow.ResilientJobSpec{
+					RecoverPolicy: &kubeflow.RecoverPolicy{Enabled: pointer.Bool(false)},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, recoverEnabled(tc.mpiJob))
 		})
 	}
 }
